@@ -19,14 +19,6 @@ export const DatePicker = ({ value, onChange, style }: Props) => {
   const current = useMemo(() => parse(value) || new Date(), [value]);
   const [view, setView] = useState(new Date(current.getFullYear(), current.getMonth(), 1));
 
-  useEffect(() => {
-    if (open) {
-      setView(new Date(current.getFullYear(), current.getMonth(), 1));
-      setMode('days');
-      updateCoords();
-    }
-  }, [open, current]);
-
   const updateCoords = () => {
     if (containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
@@ -37,6 +29,14 @@ export const DatePicker = ({ value, onChange, style }: Props) => {
       });
     }
   };
+
+  useEffect(() => {
+    if (open) {
+      setView(new Date(current.getFullYear(), current.getMonth(), 1));
+      setMode('days');
+      updateCoords();
+    }
+  }, [open, current]);
 
   useEffect(() => {
     if (!open) return;
@@ -131,7 +131,7 @@ export const DatePicker = ({ value, onChange, style }: Props) => {
           const isSel = current.getFullYear() === y;
           return (
             <div key={y} onClick={() => handleYearSelect(y)}
-              style={{ flex: 1, padding: '8px 0', background: isSel ? 'var(--accent)' : 'transparent', border: `1px solid ${isSel ? 'var(--accent)' : 'var(--border-subtle)'}`, borderRadius: 6, color: isSel ? '#fff' : 'var(--text-main)', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', fontWeight: isSel ? 700 : 400 }}
+              style={{ textAlign: 'center', padding: '10px 0', background: isSel ? 'var(--accent)' : 'transparent', borderRadius: 6, color: isSel ? '#fff' : 'var(--text-main)', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, transition: 'all .1s' }}
               onMouseEnter={e => !isSel && (e.currentTarget.style.background = 'var(--hover)')}
               onMouseLeave={e => !isSel && (e.currentTarget.style.background = 'transparent')}
             >{y}</div>

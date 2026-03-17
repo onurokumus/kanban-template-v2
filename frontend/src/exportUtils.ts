@@ -1,10 +1,10 @@
 import type { Task } from "./types.ts";
 import { fmt, today } from "./constants.ts";
 
-const fmtTime = (sec: number) => {
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  return `${h}h ${m}m`;
+const downloadBlob = (blob: Blob, filename: string) => {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
 };
 
 export const exportCSV = (tasks: Task[]) => {
@@ -25,10 +25,7 @@ export const exportCSV = (tasks: Task[]) => {
     t.completedDate || ''
   ]);
   const csv = [h, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = `kanban-export-${fmt(today)}.csv`; a.click();
-  URL.revokeObjectURL(url);
+  downloadBlob(new Blob([csv], { type: 'text/csv' }), `kanban-export-${fmt(today)}.csv`);
 };
 
 export const exportPDF = (tasks: Task[]) => {
@@ -91,8 +88,5 @@ export const exportMarkdown = (boardTitle: string, tasks: Task[]) => {
       md += `\n---\n\n`;
     });
   });
-  const blob = new Blob([md], { type: 'text/markdown' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = `kanban-${fmt(today)}.md`; a.click();
-  URL.revokeObjectURL(url);
+  downloadBlob(new Blob([md], { type: 'text/markdown' }), `kanban-${fmt(today)}.md`);
 };

@@ -17,10 +17,6 @@ export const ConfirmDialog = ({ title, message, onConfirm, onCancel, confirmText
       onClick={e => e.stopPropagation()}
       onMouseDown={e => e.stopPropagation()}
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)', animation: 'fadeIn .2s' }}>
-      <style>{`
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes scaleIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-      `}</style>
       <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 16, width: 360, padding: 24, boxShadow: '0 30px 90px rgba(0,0,0,0.4)', animation: 'scaleIn .2s ease-out', fontFamily: 'inherit' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
           <div style={{ background: 'color-mix(in srgb, ' + confirmColor + ', transparent 90%)', color: confirmColor, padding: 10, borderRadius: 12, display: 'flex' }}>

@@ -30,9 +30,6 @@ export const ToastContainer = ({ toasts, remove }: Props) => (
         position: 'relative',
         overflow: 'hidden'
       }}>
-        <style>{`
-          @keyframes toastSlideIn { from { opacity: 0; transform: translateX(100px); } to { opacity: 1; transform: translateX(0); } }
-        `}</style>
         <div style={{ flex: 1, lineHeight: 1.5 }}>{t.msg}</div>
         <button onClick={() => remove(t.id)} style={{ background: 'var(--hover)', border: 'none', color: 'var(--text-subtle)', cursor: 'pointer', padding: 6, borderRadius: 8, display: 'flex', transition: 'all 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = 'var(--text-main)'}><I.X s={12} /></button>
       </div>

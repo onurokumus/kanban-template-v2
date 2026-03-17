@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { I } from "./Icons.tsx";
+
 
 interface Props {
   onAdd: (title: string) => void;

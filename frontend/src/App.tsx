@@ -1,6 +1,6 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import type { Task, Toast } from "./types.ts";
-import { MEMBERS, PRIORITIES, TAGS, MC, PC, fmt, today, addD, parse, initTasks } from "./constants.ts";
+import { MEMBERS, PRIORITIES, TAGS, fmt, today, addD, parse } from "./constants.ts";
 import { I, Av } from "./Icons.tsx";
 import { ToastContainer } from "./ToastContainer.tsx";
 import { TaskModal } from "./TaskModal.tsx";
@@ -10,10 +10,16 @@ import { SettingsMenu } from "./SettingsMenu.tsx";
 import { Gantt } from "./Gantt.tsx";
 import { CardCol } from "./CardCol.tsx";
 import { exportCSV, exportPDF, exportMarkdown } from "./exportUtils.ts";
+import { authAPI, taskAPI } from "./api.ts";
+import { Login } from "./Login.tsx";
+
+interface AuthUser { id: string; username: string; displayName: string; }
 
 export default function App() {
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>(() => (localStorage.getItem('theme') as 'dark' | 'light') || 'dark');
-  const [tasks, setTasks] = useState<Task[]>(initTasks);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [sel, setSel] = useState<Task | null>(null);
   const [newTask, setNewTask] = useState<string | null>(null);
   const [showStats, setShowStats] = useState(false);
@@ -39,6 +45,20 @@ export default function App() {
     setToasts(p => [...p, { id, msg, color }]);
     setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 3000);
   }, []);
+
+  // ─── Auth check on mount ─────────────────────────────────────────────
+  useEffect(() => {
+    authAPI.me().then(u => { setUser(u); setAuthChecked(true); }).catch(() => setAuthChecked(true));
+    const handler = () => setUser(null);
+    window.addEventListener('auth:unauthorized', handler);
+    return () => window.removeEventListener('auth:unauthorized', handler);
+  }, []);
+
+  // ─── Load tasks from API when authenticated ──────────────────────────
+  useEffect(() => {
+    if (!user) return;
+    taskAPI.getAll().then(setTasks).catch(err => addToast(`Failed to load tasks: ${err.message}`, '#f44747'));
+  }, [user, addToast]);
 
   const fireConfetti = useCallback(() => {
     const canvas = confettiCanvas.current;
@@ -126,18 +146,22 @@ export default function App() {
       return t;
     }));
     setSel(p => p && p.id === id ? { ...p, ...u } : p);
-  }, [pushHistory, fireConfetti]);
+    // Sync to backend
+    taskAPI.update(id, u).catch(err => addToast(`Sync failed: ${err.message}`, '#f44747'));
+  }, [pushHistory, fireConfetti, addToast]);
 
   const deleteTask = useCallback((id: string) => {
     pushHistory();
     setTasks(p => p.filter(t => t.id !== id));
     addToast('Task deleted', '#f44747');
+    taskAPI.delete(id).catch(err => addToast(`Delete sync failed: ${err.message}`, '#f44747'));
   }, [pushHistory, addToast]);
 
   const addTask = useCallback((task: Task) => {
     pushHistory();
     setTasks(p => [...p, task]);
-  }, [pushHistory]);
+    taskAPI.create(task).catch(err => addToast(`Create sync failed: ${err.message}`, '#f44747'));
+  }, [pushHistory, addToast]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -158,7 +182,30 @@ export default function App() {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
+  const handleLogout = useCallback(() => {
+    authAPI.logout().finally(() => { setUser(null); setTasks([]); });
+  }, []);
+
   const hasFilters = !!(memberF.length || tagF.length || prioF.length || search);
+
+  const statusCounts = useMemo(() => {
+    let todo = 0, inprogress = 0, completed = 0, overdue = 0;
+    for (const t of tasks) {
+      if (t.status === 'todo') todo++;
+      else if (t.status === 'inprogress') inprogress++;
+      else if (t.status === 'completed') completed++;
+      if (t.status !== 'completed' && t.deadline && parse(t.deadline)! < today) overdue++;
+    }
+    return { todo, inprogress, completed, overdue };
+  }, [tasks]);
+
+  // ─── Auth Gate ─────────────────────────────────────────────────────────
+  if (!authChecked) {
+    return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1e1e1e', color: '#d4d4d4', fontFamily: "'Cascadia Code', monospace" }}>Loading...</div>;
+  }
+  if (!user) {
+    return <Login onLogin={setUser} />;
+  }
 
   return (
     <div style={{ background: 'var(--bg)', color: 'var(--text-main)', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', userSelect: 'none' }}>
@@ -235,6 +282,9 @@ export default function App() {
           font-family: inherit;
         }
         @keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+        @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+        @keyframes scaleIn{from{transform:scale(0.95);opacity:0}to{transform:scale(1);opacity:1}}
+        @keyframes toastSlideIn{from{opacity:0;transform:translateX(100px)}to{opacity:1;transform:translateX(0)}}
         ::-webkit-scrollbar{width:8px;height:8px}
         ::-webkit-scrollbar-track{background:var(--scroll-track)}
         ::-webkit-scrollbar-thumb{background:var(--scroll-thumb);border-radius:4px}
@@ -333,6 +383,11 @@ export default function App() {
           onExportMD={() => exportMarkdown('Kanban Workspace', tasks)}
         />
 
+        <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 2px' }} />
+
+        <span style={{ fontSize: 12, color: 'var(--text-dim)', fontWeight: 500 }}>{user.displayName}</span>
+        <button onClick={handleLogout} style={{ background: 'var(--hover)', border: '1px solid var(--border)', borderRadius: 4, padding: '4px 8px', color: 'var(--text-dim)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }} data-tooltip="Sign Out" data-tooltip-pos="bottom">↪</button>
+
         <button onClick={() => setNewTask('todo')} style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#007acc', border: 'none', borderRadius: 4, padding: '4px 12px', color: '#fff', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}><I.Plus />New <I.Kbd>N</I.Kbd></button>
       </div>
 
@@ -390,15 +445,14 @@ export default function App() {
           onDragEnter={(e) => { e.preventDefault(); ganttDragCounter.current++; setIsGanttOver(true); }}
           onDragLeave={() => { ganttDragCounter.current--; if (ganttDragCounter.current === 0) setIsGanttOver(false); }}
           onDrop={e => { e.preventDefault(); setIsGanttOver(false); ganttDragCounter.current = 0; const tid = e.dataTransfer.getData('tid'); if (!tid) return; const endD = fmt(addD(today, 5)); updateTask(tid, { status: 'inprogress', ganttStart: fmt(today), ganttEnd: endD, deadline: endD, completedDate: undefined }); addToast('Moved to In Progress', '#007acc'); }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px', height: 48, background: 'var(--bg-alt)', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, boxSizing: 'border-box', cursor: 'pointer' }} onClick={() => setColC(p => ({ ...p, ip: !p.ip }))}>
-            <I.Chev open={!colC.ip} s={12} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px', height: 48, background: 'var(--bg-alt)', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, boxSizing: 'border-box' }}>
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#007acc' }} />
             <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-main)' }}>IN PROGRESS</span>
-            <span style={{ fontSize: 12, color: 'var(--text-subtle)' }}>— Gantt View</span>
+
             <span style={{ fontSize: 13, color: 'var(--text-dim)', background: 'var(--hover)', padding: '1px 8px', borderRadius: 8, fontWeight: 600, marginLeft: 'auto' }}>{tasks.filter(t => t.status === 'inprogress').length}</span>
             <button onClick={e => { e.stopPropagation(); setNewTask('inprogress'); }} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', padding: 2 }}><I.Plus /></button>
           </div>
-          {!colC.ip ? <Gantt 
+          <Gantt 
           tasks={tasks} 
           onTaskClick={setSel} 
           onUpdate={updateTask} 
@@ -409,7 +463,7 @@ export default function App() {
           zoom={zoom} 
           showArrows={showArrows} 
           onPushHistory={pushHistory}
-        />    : <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-subtle)', fontSize: 14 }}>Gantt collapsed — click header to expand</div>}
+        />
         </div>
 
         <CardCol title="COMPLETED" status="completed" tasks={tasks} color="#4ec9b0" collapsed={colC.completed} onToggle={() => setColC(p => ({ ...p, completed: !p.completed }))} onTaskClick={setSel} onUpdate={updateTask} onDelete={deleteTask} searchFilter={search} memberFilter={memberF} tagFilter={tagF} priorityFilter={prioF} onNewTask={setNewTask} toast={addToast} />
@@ -418,19 +472,19 @@ export default function App() {
       {/* STATUS BAR */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0 12px', height: 22, background: '#007acc', flexShrink: 0, fontSize: 12, color: '#fff' }}>
         <span>Tasks: {tasks.length}</span>
-        <span>Todo: {tasks.filter(t => t.status === 'todo').length}</span>
-        <span>Active: {tasks.filter(t => t.status === 'inprogress').length}</span>
-        <span>Done: {tasks.filter(t => t.status === 'completed').length}</span>
+        <span>Todo: {statusCounts.todo}</span>
+        <span>Active: {statusCounts.inprogress}</span>
+        <span>Done: {statusCounts.completed}</span>
         <span style={{ color: '#fff8', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => setShowShortcuts(true)} data-tooltip="Keyboard Shortcuts" data-tooltip-pos="top">
           <I.Kbd>?</I.Kbd> Shortcuts
         </span>
-        <span style={{ marginLeft: 'auto' }}>{tasks.filter(t => t.status !== 'completed' && t.deadline && parse(t.deadline)! < today).length} overdue</span>
+        <span style={{ marginLeft: 'auto' }}>{statusCounts.overdue} overdue</span>
         <span>{fmt(today)}</span>
       </div>
 
       {/* MODALS */}
-      {sel && <TaskModal task={sel} onClose={() => setSel(null)} onUpdate={updateTask} onDelete={deleteTask} allTasks={tasks} toast={addToast} />}
-      {newTask && <NewTaskModal defaultStatus={newTask} onClose={() => setNewTask(null)} onAdd={addTask} toast={addToast} />}
+      {sel && <TaskModal key={sel.id} task={sel} onClose={() => setSel(null)} onUpdate={updateTask} onDelete={deleteTask} onAdd={addTask} onTaskClick={setSel} allTasks={tasks} toast={addToast} />}
+      {newTask && <NewTaskModal defaultStatus={newTask} onClose={() => setNewTask(null)} onAdd={addTask} toast={addToast} epics={tasks.filter(t => t.isEpic)} />}
       {showStats && <StatsPanel tasks={tasks} onClose={() => setShowStats(false)} />}
 
       {showShortcuts && (

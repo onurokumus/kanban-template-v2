@@ -24,12 +24,14 @@ export interface Task {
   tags: string[];
   status: "todo" | "inprogress" | "completed";
   estHours: number;
-  deadline: string;
+  deadline?: string;
   comments: Comment[];
   created: string;
   subtasks: Subtask[];
   dependencies: string[];
   progress: number;
+  isEpic?: boolean;
+  epicId?: string; // Links a task to a parent Epic
   ganttStart?: string;
   ganttEnd?: string;
   completedDate?: string;

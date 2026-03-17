@@ -5,7 +5,8 @@
       "Bash(npm create vite@latest temp-proj -- --template react-ts)",
       "Bash(npm install recharts)",
       "Bash(npx tsc -b)",
-      "Bash(npx vite build)"
+      "Bash(npx vite build)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

@@ -1,5 +1,5 @@
 import { useState, useMemo, Fragment } from "react";
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer, Cell, PieChart, Pie, CartesianGrid, Legend } from "recharts";
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer, Cell, PieChart, Pie, CartesianGrid } from "recharts";
 import type { Task, MemberStat } from "./types.ts";
 import { MEMBERS, MC, fmt, today, addD, parse, ganttOrigin } from "./constants.ts";
 import { I, Av } from "./Icons.tsx";

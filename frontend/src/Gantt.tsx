@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef, Fragment } from "react";
 import type { Task } from "./types.ts";
-import { MEMBERS, MC, PC, TC, TCT, PRIORITIES, ROW_H, today, fmt, parse, diffD, addD } from "./constants.ts";
+import { MEMBERS, MC, PC, PRIORITIES, ROW_H, today, fmt, parse, diffD, addD, isTaskBlocked } from "./constants.ts";
 import { I, Av } from "./Icons.tsx";
 import { GanttTip } from "./GanttTip.tsx";
 import { CtxMenu } from "./CtxMenu.tsx";
@@ -155,6 +155,31 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
     const m: Record<string, Task[]> = {};
     MEMBERS.forEach(n => (m[n] = []));
     filtered.forEach(t => { if (m[t.assignee]) m[t.assignee].push(t); });
+    // Sort: Epics first, then their children right after, then regular tasks
+    Object.keys(m).forEach(member => {
+      const raw = m[member];
+      const sorted: Task[] = [];
+      const epicIds = new Set(raw.filter(t => t.isEpic).map(t => t.id));
+      const children = new Map<string, Task[]>();
+      const regular: Task[] = [];
+      raw.forEach(t => {
+        if (t.isEpic) return; // handled below
+        if (t.epicId && epicIds.has(t.epicId)) {
+          if (!children.has(t.epicId)) children.set(t.epicId, []);
+          children.get(t.epicId)!.push(t);
+        } else {
+          regular.push(t);
+        }
+      });
+      // Add epics with their children grouped right after
+      raw.filter(t => t.isEpic).forEach(epic => {
+        sorted.push(epic);
+        (children.get(epic.id) || []).forEach(c => sorted.push(c));
+      });
+      // Add remaining regular tasks
+      regular.forEach(t => sorted.push(t));
+      m[member] = sorted;
+    });
     return m;
   }, [filtered]);
 
@@ -165,6 +190,7 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
     const bounds: Record<string, { top: number; bottom: number }> = {};
     let cumY = 56; 
     MEMBERS.forEach(m => {
+      if (memberFilter.length > 0 && !memberFilter.includes(m)) return;
       const top = cumY;
       cumY += 36;
       if (!cLanes[m]) {
@@ -182,11 +208,11 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
       bounds[m] = { top, bottom: cumY };
     });
     return { taskPositions: pos, laneBounds: bounds };
-  }, [mTasks, cLanes, DAY_W, range.start]);
+  }, [mTasks, cLanes, DAY_W, range.start, memberFilter]);
 
   const depLines = useMemo(() => {
     const lines: { from: { x: number; xEnd: number; y: number }; to: { x: number; xEnd: number; y: number }; color: string }[] = [];
-    tasks.filter(t => t.status === 'inprogress' && (t.dependencies || []).length > 0).forEach(t => {
+    filtered.filter(t => (t.dependencies || []).length > 0).forEach(t => {
       (t.dependencies || []).forEach(dId => {
         const from = taskPositions[dId];
         const to = taskPositions[t.id];
@@ -194,10 +220,11 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
       });
     });
     return lines;
-  }, [tasks, taskPositions]);
+  }, [filtered, taskPositions]);
 
   const handlePD = (e: React.PointerEvent, task: Task, mode: DragState["mode"], subtaskId?: string) => {
     e.stopPropagation(); e.preventDefault();
+    draggedRef.current = false;
     const s = subtaskId ? task.subtasks.find(x => x.id === subtaskId)?.ganttStart : task.ganttStart;
     const end = subtaskId ? task.subtasks.find(x => x.id === subtaskId)?.deadline : task.ganttEnd;
     if (!s || !end) return;
@@ -223,7 +250,7 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
 
       setDrag(prev => prev ? { ...prev, currentX: e.clientX, currentY: e.clientY } : null);
 
-      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) draggedRef.current = true;
+      if (Math.abs(dx) > 5 || Math.abs(dy) > 5) draggedRef.current = true;
       
       const dd = Math.round(dx / DAY_W);
       const oS = parse(drag.oS)!, oE = parse(drag.oE)!;
@@ -232,27 +259,29 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
 
       // Handle Horizontal Update
       if (effectiveAxis === 'x' || (!effectiveAxis && Math.abs(dx) > 0)) {
-        if (drag.subtaskId) {
-          let nS: string | undefined, nE: string | undefined;
-          const subs = target.subtasks.map(s => {
-            if (s.id !== drag.subtaskId) return s;
-            if (drag.mode === 'move') { nS = fmt(addD(oS, dd)); nE = fmt(addD(oE, dd)); return { ...s, ganttStart: nS, deadline: nE }; }
-            if (drag.mode === 'rl') { const ns = addD(oS, dd); if (diffD(ns, oE) >= 1) { nS = fmt(ns); return { ...s, ganttStart: nS }; } return s; }
-            const ne = addD(oE, dd); if (diffD(oS, ne) >= 1) { nE = fmt(ne); return { ...s, deadline: nE }; } return s;
-          });
-          const update: Partial<Task> = { subtasks: subs };
-          if (target.status === 'inprogress') {
-            if (nS && target.ganttStart && nS < target.ganttStart) update.ganttStart = nS;
-            if (nE && target.deadline && nE > target.deadline) { update.ganttEnd = nE; update.deadline = nE; }
+        if (!target.isEpic) {
+          if (drag.subtaskId) {
+            let nS: string | undefined, nE: string | undefined;
+            const subs = target.subtasks.map(s => {
+              if (s.id !== drag.subtaskId) return s;
+              if (drag.mode === 'move') { nS = fmt(addD(oS, dd)); nE = fmt(addD(oE, dd)); return { ...s, ganttStart: nS, deadline: nE }; }
+              if (drag.mode === 'rl') { const ns = addD(oS, dd); if (diffD(ns, oE) >= 1) { nS = fmt(ns); return { ...s, ganttStart: nS }; } return s; }
+              const ne = addD(oE, dd); if (diffD(oS, ne) >= 1) { nE = fmt(ne); return { ...s, deadline: nE }; } return s;
+            });
+            const update: Partial<Task> = { subtasks: subs };
+            if (target.status === 'inprogress') {
+              if (nS && target.ganttStart && nS < target.ganttStart) update.ganttStart = nS;
+              if (nE && target.deadline && nE > target.deadline) { update.ganttEnd = nE; update.deadline = nE; }
+            }
+            onUpdate(drag.taskId, update, true);
+          } else {
+            if (drag.mode === 'move') { 
+              const ne = fmt(addD(oE, dd)); 
+              onUpdate(drag.taskId, { ganttStart: fmt(addD(oS, dd)), ganttEnd: ne, deadline: ne }, true); 
+            }
+            else if (drag.mode === 'rl') { const ns = addD(oS, dd); if (diffD(ns, oE) >= 1) onUpdate(drag.taskId, { ganttStart: fmt(ns) }, true); }
+            else if (drag.mode === 'rr') { const ne = addD(oE, dd); if (diffD(oS, ne) >= 1) { const neF = fmt(ne); onUpdate(drag.taskId, { ganttEnd: neF, deadline: neF }, true); } }
           }
-          onUpdate(drag.taskId, update, true);
-        } else {
-          if (drag.mode === 'move') { 
-            const ne = fmt(addD(oE, dd)); 
-            onUpdate(drag.taskId, { ganttStart: fmt(addD(oS, dd)), ganttEnd: ne, deadline: ne }, true); 
-          }
-          else if (drag.mode === 'rl') { const ns = addD(oS, dd); if (diffD(ns, oE) >= 1) onUpdate(drag.taskId, { ganttStart: fmt(ns) }, true); }
-          else if (drag.mode === 'rr') { const ne = addD(oE, dd); if (diffD(oS, ne) >= 1) { const neF = fmt(ne); onUpdate(drag.taskId, { ganttEnd: neF, deadline: neF }, true); } }
         }
       }
 
@@ -312,6 +341,7 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
         }
       }
       setDrag(null);
+      requestAnimationFrame(() => { draggedRef.current = false; });
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
@@ -498,6 +528,7 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
 
 
           {MEMBERS.map(member => {
+            if (memberFilter.length > 0 && !memberFilter.includes(member)) return null;
             const mt = mTasks[member] || [];
             const isC = cLanes[member];
             const laneH = isC ? 0 : (mt.length === 0 ? 40 : mt.reduce((acc, t) => acc + getTaskH(t), 0));
@@ -535,18 +566,52 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
                     maxHeight: isC ? 0 : laneH + 10,
                     boxSizing: 'border-box'
                   }}>
-                    {mt.map((t) => (
-                      <div key={t.id} style={{ height: getTaskH(t), display: 'flex', flexDirection: 'column', borderBottom: '1px solid var(--border-subtle)', boxSizing: 'border-box' }}>
+                    {mt.map((t, tIdx) => {
+                      const isEpicChild = !!t.epicId;
+                      const _epicParent = isEpicChild ? mt.find(x => x.id === t.epicId) : null;
+                      // Check if next task is also a child of the same epic (for connector line)
+                      const nextTask = mt[tIdx + 1];
+                      const isLastChild = isEpicChild && (!nextTask || nextTask.epicId !== t.epicId);
+
+                      return (
+                      <div key={t.id} style={{ height: getTaskH(t), display: 'flex', flexDirection: 'column', borderBottom: '1px solid var(--border-subtle)', boxSizing: 'border-box', background: t.isEpic ? 'color-mix(in srgb, var(--accent), transparent 94%)' : 'transparent' }}>
                         <div 
                           draggable 
                           onDragStart={e => e.dataTransfer.setData('tid', t.id)}
-                          style={{ height: 48, display: 'flex', alignItems: 'center', padding: '0 10px', gap: 5, cursor: 'pointer' }} 
+                          style={{ height: 48, display: 'flex', alignItems: 'center', padding: t.isEpic ? '0 10px' : isEpicChild ? '0 10px 0 8px' : '0 10px', gap: 5, cursor: 'pointer' }} 
                           onClick={() => onTaskClick(t)} 
                           onContextMenu={e => handleCtx(e, t)}
                         >
-                          <div style={{ width: 4, height: 4, borderRadius: '50%', background: PC[t.priority], flexShrink: 0 }} />
-                          <span style={{ fontSize: 12, color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, fontWeight: 500 }}>{t.title}</span>
-                          {(t.dependencies || []).length > 0 && <span style={{ opacity: .4 }}><I.Link /></span>}
+                          {/* Epic row styling */}
+                          {t.isEpic ? (
+                            <>
+                              <div style={{ width: 3, height: 28, borderRadius: 2, background: 'var(--accent)', flexShrink: 0 }} />
+                              <span style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', background: 'color-mix(in srgb, var(--accent), transparent 82%)', padding: '1px 5px', borderRadius: 3, flexShrink: 0 }}>Epic</span>
+                              <span style={{ fontSize: 12, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, fontWeight: 700 }}>{t.title}</span>
+                              <span style={{ fontSize: 10, color: 'var(--text-subtle)', flexShrink: 0 }}>{tasks.filter(ct => ct.epicId === t.id).length}</span>
+                            </>
+                          ) : isEpicChild ? (
+                            /* Child task row — indented with L-shaped tree connector */
+                            <>
+                              <div style={{ width: 20, flexShrink: 0, position: 'relative', height: 48 }}>
+                                {/* Vertical trunk line — full height for middle children, half for last */}
+                                <div style={{ position: 'absolute', left: 8, top: 0, height: isLastChild ? '50%' : '100%', width: 0, borderLeft: '1.5px solid color-mix(in srgb, var(--accent), transparent 65%)' }} />
+                                {/* Horizontal branch to dot */}
+                                <div style={{ position: 'absolute', left: 8, top: '50%', width: 7, height: 0, borderTop: '1.5px solid color-mix(in srgb, var(--accent), transparent 65%)' }} />
+                                {/* Dot at branch end */}
+                                <div style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', width: 4, height: 4, borderRadius: '50%', background: 'var(--accent)', opacity: .5 }} />
+                              </div>
+                              <span style={{ fontSize: 12, color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, fontWeight: 500 }}>{t.title}</span>
+                              {(t.dependencies || []).length > 0 && <span style={{ opacity: .4 }}><I.Link /></span>}
+                            </>
+                          ) : (
+                            /* Regular task row */
+                            <>
+                              <div style={{ width: 4, height: 4, borderRadius: '50%', background: PC[t.priority], flexShrink: 0 }} />
+                              <span style={{ fontSize: 12, color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, fontWeight: 500 }}>{t.title}</span>
+                              {(t.dependencies || []).length > 0 && <span style={{ opacity: .4 }}><I.Link /></span>}
+                            </>
+                          )}
                         </div>
                         {(t.subtasks || []).length > 0 && (
                           <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -559,7 +624,7 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
                           </div>
                         )}
                       </div>
-                    ))}
+                    );})}
                   </div>
 
                   {/* Bars layer */}
@@ -569,14 +634,19 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
                         let taskTop = 0;
                         for (let j = 0; j < idx; j++) taskTop += getTaskH(mt[j]);
                         
-                        if (!t.ganttStart || !t.ganttEnd) return null;
-                        const s = diffD(range.start, t.ganttStart);
-                        const dur = diffD(t.ganttStart, t.ganttEnd);
-                        const left = s * DAY_W, width = Math.max(dur * DAY_W, DAY_W);
-                        const isBlocked = (t.dependencies || []).some(depId => {
-                          const depTask = tasks.find(x => x.id === depId);
-                          return depTask && depTask.status !== 'completed';
-                        });
+                        let left = 0, width = 0;
+                        if (t.isEpic) {
+                          left = -50000;
+                          width = 100000;
+                        } else {
+                          if (!t.ganttStart || !t.ganttEnd) return null;
+                          const s = diffD(range.start, t.ganttStart);
+                          const dur = diffD(t.ganttStart, t.ganttEnd);
+                          left = s * DAY_W;
+                          width = Math.max(dur * DAY_W, DAY_W);
+                        }
+                        
+                        const isBlocked = isTaskBlocked(t, tasks);
                         const overdue = t.status !== 'completed' && t.deadline && parse(t.deadline)! < today;
                         const bc = MC[t.assignee], prog = t.progress || 0;
 
@@ -590,32 +660,44 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
                               onMouseLeave={() => setTip(null)}
                               style={{ 
                                 position: 'absolute', top: taskTop + 5, left, width, height: 38, borderRadius: 4, 
-                                background: 'var(--bg)', 
-                                border: `1.5px solid ${isBlocked ? 'var(--text-subtle)' : `color-mix(in srgb, ${bc}, transparent 60%)`}`, 
-                                cursor: drag?.taskId === t.id ? 'grabbing' : 'grab', 
+                                background: t.isEpic ? `color-mix(in srgb, ${bc}, transparent 85%)` : 'var(--bg)', 
+                                borderTop: `1.5px solid ${isBlocked ? 'var(--text-subtle)' : `color-mix(in srgb, ${bc}, transparent 60%)`}`,
+                                borderBottom: `1.5px solid ${isBlocked ? 'var(--text-subtle)' : `color-mix(in srgb, ${bc}, transparent 60%)`}`,
+                                borderLeft: t.isEpic ? 'none' : `1.5px solid ${isBlocked ? 'var(--text-subtle)' : `color-mix(in srgb, ${bc}, transparent 60%)`}`,
+                                borderRight: t.isEpic ? 'none' : `1.5px solid ${isBlocked ? 'var(--text-subtle)' : `color-mix(in srgb, ${bc}, transparent 60%)`}`,
+                                cursor: drag?.taskId === t.id ? 'grabbing' : 'pointer', 
                                 zIndex: drag?.taskId === t.id ? 20 : 12, 
                                 transition: (drag?.taskId === t.id || isExpandingRef.current) ? 'none' : 'left .15s,width .15s, transform .15s', 
                                 userSelect: 'none', 
-                                overflow: 'hidden',
+                                overflow: t.isEpic ? 'visible' : 'hidden', 
                                 filter: isBlocked ? 'grayscale(0.8) opacity(0.6)' : 'none',
                                 transform: (drag?.taskId === t.id && drag.mode === 'move' && !drag.subtaskId && drag.axis === 'y') 
                                   ? `translateY(${drag.currentY - drag.startY}px)` : 'none'
                               }}>
-                              <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '100%', background: `color-mix(in srgb, ${bc}, transparent 90%)`, pointerEvents: 'none' }} />
-                              <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${prog}%`, background: `color-mix(in srgb, ${bc}, transparent 60%)`, borderRadius: '3px 0 0 3px', transition: 'width .2s', pointerEvents: 'none' }} />
+                              {!t.isEpic && <div style={{ position: 'absolute', inset: 0, borderRadius: 2, overflow: 'hidden' }}>
+                                <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '100%', background: `color-mix(in srgb, ${bc}, transparent 90%)`, pointerEvents: 'none' }} />
+                                <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${prog}%`, background: `color-mix(in srgb, ${bc}, transparent 60%)`, borderRadius: '3px 0 0 3px', transition: 'width .2s', pointerEvents: 'none' }} />
+                              </div>}
 
-                              <div onPointerDown={e => handlePD(e, t, 'rl')} style={{ position: 'absolute', left: -2, top: 0, bottom: 0, width: 8, cursor: 'ew-resize', zIndex: 13 }}>
+                              {!t.isEpic && <div onPointerDown={e => handlePD(e, t, 'rl')} style={{ position: 'absolute', left: -2, top: 0, bottom: 0, width: 8, cursor: 'ew-resize', zIndex: 13 }}>
                                 <div style={{ position: 'absolute', left: 2, top: '30%', bottom: '30%', width: 2, borderRadius: 1, background: bc, opacity: .4 }} />
-                              </div>
-                              <div onPointerDown={e => handlePD(e, t, 'move')} onClick={() => { if (!draggedRef.current) onTaskClick(t); }} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 4, padding: '0 12px', overflow: 'hidden', height: '100%', position: 'relative', zIndex: 1 }}>
-                                <span style={{ fontSize: 12, color: 'var(--text-main)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</span>
+                              </div>}
+                              
+                              <div 
+                                onPointerDown={e => { if (!t.isEpic) handlePD(e, t, 'move'); else draggedRef.current = false; }} 
+                                onClick={() => { if (!draggedRef.current) onTaskClick(t); }} 
+                                style={{ position: t.isEpic ? 'sticky' : 'relative', left: t.isEpic ? `calc(50% + ${SIDEBAR_W / 2}px)` : undefined, transform: t.isEpic ? 'translateX(-50%)' : undefined, width: t.isEpic ? 'max-content' : '100%', display: 'flex', alignItems: 'center', gap: 4, padding: '0 12px', height: '100%', zIndex: 1, boxSizing: 'border-box' }}
+                              >
+                                {t.isEpic && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, color: bc }}><I.Link /></div>}
+                                <span style={{ fontSize: 12, color: 'var(--text-main)', fontWeight: t.isEpic ? 700 : 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</span>
                                 {isBlocked && <I.X s={12} />}
                                 {overdue && <span style={{ fontSize: 10, color: '#f44747', fontWeight: 700, flexShrink: 0 }}>!</span>}
-                                <span style={{ fontSize: 11, color: bc, marginLeft: 'auto', fontWeight: 600, flexShrink: 0 }}>{prog}%</span>
+                                {t.isEpic ? null : <span style={{ fontSize: 11, color: bc, marginLeft: 'auto', fontWeight: 600, flexShrink: 0 }}>{prog}%</span>}
                               </div>
-                              <div onPointerDown={e => handlePD(e, t, 'rr')} style={{ position: 'absolute', right: -2, top: 0, bottom: 0, width: 8, cursor: 'ew-resize', zIndex: 13 }}>
+                              
+                              {!t.isEpic && <div onPointerDown={e => handlePD(e, t, 'rr')} style={{ position: 'absolute', right: -2, top: 0, bottom: 0, width: 8, cursor: 'ew-resize', zIndex: 13 }}>
                                 <div style={{ position: 'absolute', right: 2, top: '30%', bottom: '30%', width: 2, borderRadius: 1, background: bc, opacity: .4 }} />
-                              </div>
+                              </div>}
                             </div>
                             {(t.subtasks || []).map((s, si) => {
                               if (!s.ganttStart || !s.deadline) return null;
@@ -641,7 +723,9 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
                                       (drag.axis === 'x' ? `translateX(${Math.round((drag.currentX - drag.startX) / DAY_W) * DAY_W}px)` : 'none')) : 'none'
                                   }} 
                                   onPointerDown={e => handlePD(e, t, 'move', s.id)}
-                                  data-tooltip={`${s.title} (${s.ganttStart} to ${s.deadline})`}
+                                  onMouseEnter={e => { e.currentTarget.style.zIndex = '100'; }}
+                                  onMouseLeave={e => { e.currentTarget.style.zIndex = '11'; }}
+                                  data-tooltip={`${s.title} (${s.ganttStart} → ${s.deadline})`}
                                 >
                                   {/* Subtask resize handles */}
                                   <div onPointerDown={e => handlePD(e, t, 'rl', s.id)} style={{ position: 'absolute', left: -2, top: 0, bottom: 0, width: 6, cursor: 'ew-resize', zIndex: 1 }} />
@@ -695,7 +779,7 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
         </div>
       </div>
 
-      {tip && <GanttTip task={tip.task} x={tip.x} y={tip.y} />}
+      {tip && <GanttTip task={tip.task} x={tip.x} y={tip.y} allTasks={tasks} />}
 
       {ctxMenu && <CtxMenu x={ctxMenu.x} y={ctxMenu.y} onClose={() => setCtxMenu(null)} items={[
         { label: 'Open Details', icon: <I.Edit />, action: () => onTaskClick(ctxMenu.task) },

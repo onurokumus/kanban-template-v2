@@ -12,7 +12,31 @@ interface Props {
   onExportMD: () => void;
 }
 
-const FONT = "'Cascadia Code','Fira Code','Segoe UI',monospace";
+const Item = ({ icon, label, action, active, danger }: { icon: any, label: string, action: () => void, active?: boolean, danger?: boolean }) => (
+  <div 
+    onClick={() => { action(); }}
+    style={{ 
+      display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
+      background: active ? 'color-mix(in srgb, var(--accent), transparent 90%)' : 'transparent',
+      color: danger ? '#f44747' : active ? 'var(--accent)' : 'var(--text-main)',
+      fontSize: 13, fontWeight: active ? 700 : 500, transition: 'all .15s',
+      fontFamily: 'inherit'
+    }}
+    onMouseEnter={e => !active && (e.currentTarget.style.background = 'var(--hover)')}
+    onMouseLeave={e => !active && (e.currentTarget.style.background = 'transparent')}
+  >
+    <span style={{ display: 'flex', opacity: active ? 1 : 0.7, width: 16, justifyContent: 'center' }}>{icon}</span>
+    <span style={{ flex: 1 }}>{label}</span>
+    {active && <I.Check s={12} />}
+  </div>
+);
+
+const Section = ({ title, children }: { title: string, children: any }) => (
+  <div style={{ padding: '6px 0' }}>
+    <div style={{ padding: '4px 12px', fontSize: 10, fontWeight: 800, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '.12em', fontFamily: 'inherit', marginBottom: 4 }}>{title}</div>
+    {children}
+  </div>
+);
 
 export const SettingsMenu = ({ theme, setTheme, showArrows, setShowArrows, onExportPDF, onExportCSV, onExportMD }: Props) => {
   const [open, setOpen] = useState(false);
@@ -45,32 +69,6 @@ export const SettingsMenu = ({ theme, setTheme, showArrows, setShowArrows, onExp
     }
   }, [open]);
 
-  const Item = ({ icon, label, action, active, danger }: { icon: any, label: string, action: () => void, active?: boolean, danger?: boolean }) => (
-    <div 
-      onClick={() => { action(); }}
-      style={{ 
-        display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
-        background: active ? 'color-mix(in srgb, var(--accent), transparent 90%)' : 'transparent',
-        color: danger ? '#f44747' : active ? 'var(--accent)' : 'var(--text-main)',
-        fontSize: 13, fontWeight: active ? 700 : 500, transition: 'all .15s',
-        fontFamily: FONT
-      }}
-      onMouseEnter={e => !active && (e.currentTarget.style.background = 'var(--hover)')}
-      onMouseLeave={e => !active && (e.currentTarget.style.background = 'transparent')}
-    >
-      <span style={{ display: 'flex', opacity: active ? 1 : 0.7, width: 16, justifyContent: 'center' }}>{icon}</span>
-      <span style={{ flex: 1 }}>{label}</span>
-      {active && <I.Check s={12} />}
-    </div>
-  );
-
-  const Section = ({ title, children }: { title: string, children: any }) => (
-    <div style={{ padding: '6px 0' }}>
-      <div style={{ padding: '4px 12px', fontSize: 10, fontWeight: 800, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '.12em', fontFamily: FONT, marginBottom: 4 }}>{title}</div>
-      {children}
-    </div>
-  );
-
   const Popover = (
     <div 
       ref={popRef}
@@ -79,7 +77,7 @@ export const SettingsMenu = ({ theme, setTheme, showArrows, setShowArrows, onExp
         width: 220, background: 'var(--popover-bg)', border: '1px solid var(--border)', borderRadius: 12,
         boxShadow: '0 20px 60px var(--shadow)', zIndex: 10000, padding: 8,
         backdropFilter: 'blur(20px) saturate(180%)', userSelect: 'none', animation: 'slideIn .15s ease-out',
-        fontFamily: FONT
+        fontFamily: 'inherit'
       }}
     >
       <Section title="Appearance">
@@ -100,8 +98,8 @@ export const SettingsMenu = ({ theme, setTheme, showArrows, setShowArrows, onExp
   );
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center' }}>
-      <button 
+    <>
+      <button
         ref={btnRef}
         onClick={() => setOpen(!open)}
         style={{ 
@@ -109,7 +107,7 @@ export const SettingsMenu = ({ theme, setTheme, showArrows, setShowArrows, onExp
           background: open ? 'var(--hover)' : 'var(--bg)', 
           border: '1px solid var(--border)', 
           borderRadius: 6, padding: '7px 12px', color: 'var(--text-main)', fontSize: 13, 
-          cursor: 'pointer', fontFamily: FONT, fontWeight: 600, transition: 'all .2s',
+          cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, transition: 'all .2s',
           boxShadow: open ? 'inset 0 2px 4px rgba(0,0,0,0.05)' : 'none'
         }}
         data-tooltip="Settings & Export"
@@ -122,6 +120,6 @@ export const SettingsMenu = ({ theme, setTheme, showArrows, setShowArrows, onExp
         <I.Chev open={open} s={10} />
       </button>
       {open && createPortal(Popover, document.body)}
-    </div>
+    </>
   );
 };

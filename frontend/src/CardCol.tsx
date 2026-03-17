@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, Fragment } from "react";
 import type { Task } from "./types.ts";
-import { MEMBERS, PRIORITIES, MC, PC, TC, TCT, fmt, today, addD, parse } from "./constants.ts";
+import { PRIORITIES, MC, PC, TC, TCT, fmt, today, addD, parse, isTaskBlocked } from "./constants.ts";
 import { I, Av } from "./Icons.tsx";
 import { CtxMenu } from "./CtxMenu.tsx";
 import { ConfirmDialog } from "./ConfirmDialog.tsx";
@@ -68,49 +68,61 @@ export const CardCol = ({ title, status, tasks, color, collapsed, onToggle, onTa
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minWidth: collapsed ? 48 : 'auto', width: collapsed ? 48 : 290, transition: 'width .25s cubic-bezier(0.4, 0, 0.2, 1)', flexShrink: 0, borderRight: '2px solid var(--border)', background: color ? color + '05' : 'var(--bg)', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minWidth: collapsed ? 48 : 'auto', width: collapsed ? 48 : 290, transition: 'width .25s cubic-bezier(0.4, 0, 0.2, 1)', flexShrink: 0, borderRight: '2px solid var(--border)', borderLeft: collapsed ? `3px solid ${color}` : 'none', background: color ? color + '05' : 'var(--bg)', overflow: 'hidden' }}>
       <div style={{ 
         display: 'flex', 
         alignItems: 'center', 
         gap: 10, 
-        padding: collapsed ? '20px 0' : '14px 18px', 
-        borderBottom: '1px solid var(--border-subtle)', 
+        padding: collapsed ? '16px 0' : '14px 18px', 
+        borderBottom: collapsed ? 'none' : '1px solid var(--border-subtle)', 
         cursor: 'pointer', 
         background: 'rgba(var(--bg-alt-rgb), 0.4)', 
         backdropFilter: 'blur(10px)',
-        flexShrink: 0, 
-        height: 52, 
+        flexShrink: collapsed ? 1 : 0, 
+        flex: collapsed ? 1 : 'none',
+        height: collapsed ? 'auto' : 52, 
         boxSizing: 'border-box',
         transition: 'all .25s cubic-bezier(0.4, 0, 0.2, 1)',
         position: 'relative'
       }} onClick={onToggle}>
         {collapsed ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, width: '100%', animation: 'fadeIn .3s ease' }}>
-            <div style={{ transform: 'rotate(-90deg)', transformOrigin: 'center', color: 'var(--text-subtle)', display: 'flex' }}><I.Chev open={false} s={14} /></div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', height: '100%', position: 'relative', animation: 'fadeIn .3s ease' }}>
+            {/* Accent top bar */}
+            <div style={{ width: 24, height: 3, borderRadius: 2, background: color, opacity: .7, marginBottom: 12, flexShrink: 0 }} />
+            {/* Vertical title */}
             <div style={{ 
-              writingMode: 'vertical-rl', 
-              textOrientation: 'mixed', 
+              flex: 1, 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              overflow: 'hidden'
+            }}>
+              <span style={{ 
+                writingMode: 'vertical-lr', 
+                transform: 'rotate(180deg)',
+                fontSize: 11, 
+                fontWeight: 700, 
+                color: 'var(--text-dim)', 
+                letterSpacing: '.12em',
+                textTransform: 'uppercase',
+                whiteSpace: 'nowrap'
+              }}>{title}</span>
+            </div>
+            {/* Count badge */}
+            <div style={{ 
+              background: `color-mix(in srgb, ${color}, transparent 80%)`,
+              color: color, 
               fontSize: 11, 
               fontWeight: 800, 
-              color: 'var(--text-dim)', 
-              letterSpacing: '.15em',
-              textTransform: 'uppercase',
-              opacity: 0.9,
-              marginTop: 4
-            }}>{title}</div>
-            <div style={{ 
-              background: color,
-              color: '#fff', 
-              fontSize: 10, 
-              fontWeight: 800, 
-              width: 20,
-              height: 20,
-              borderRadius: '50%',
+              width: 24,
+              height: 24,
+              borderRadius: 6,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: `0 4px 10px ${color}44`,
-              marginTop: 'auto'
+              border: `1px solid color-mix(in srgb, ${color}, transparent 60%)`,
+              flexShrink: 0,
+              marginTop: 8
             }}>{fTasks.length}</div>
           </div>
         ) : (
@@ -134,7 +146,7 @@ export const CardCol = ({ title, status, tasks, color, collapsed, onToggle, onTa
         )}
       </div>
 
-      {!collapsed && <div style={{ flex: 1, overflowY: 'auto', padding: 8, display: 'flex', flexDirection: 'column', gap: 6, transition: 'background 0.2s', border: isOver ? `2px dashed ${color}` : '2px dashed transparent', margin: '0 2px 2px 2px', borderRadius: 8, background: isOver ? color + '15' : 'transparent', position: 'relative' }} 
+      {!collapsed && <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: 8, display: 'flex', flexDirection: 'column', gap: 6, transition: 'background 0.2s', border: isOver ? `2px dashed ${color}` : '2px dashed transparent', margin: '0 2px 2px 2px', borderRadius: 8, background: isOver ? color + '15' : 'transparent', position: 'relative' }} 
         onDragOver={e => e.preventDefault()} 
         onDragEnter={(e) => { e.preventDefault(); dragCounter.current++; setIsOver(true); }}
         onDragLeave={() => { dragCounter.current--; if (dragCounter.current === 0) setIsOver(false); }}
@@ -160,39 +172,36 @@ export const CardCol = ({ title, status, tasks, color, collapsed, onToggle, onTa
             {(task.tags || []).length > 0 && <div style={{ display: 'flex', gap: 3, marginBottom: 8, flexWrap: 'wrap' }}>
               {task.tags.map(t => <span key={t} style={{ background: TC[t] || 'var(--tag-bg)', color: TCT[t] || 'var(--text-dim)', fontSize: 10, padding: '2px 8px', borderRadius: 4, fontWeight: 700, letterSpacing: '.02em' }}>{t}</span>)}
             </div>}
-            <div style={{ color: 'var(--text-main)', fontSize: 14, fontWeight: 500, lineHeight: 1.4, marginBottom: 6 }}>{task.title}</div>
-            
+
             {(task.subtasks || []).length > 0 && <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8, paddingLeft: 4 }}>
-              {task.subtasks.map(s => (
+              {task.subtasks.map(s => {
+                const toggleSub = () => {
+                  const subs = task.subtasks.map(st => st.id === s.id ? { ...st, done: !st.done } : st);
+                  const doneCount = subs.filter(st => st.done).length;
+                  const progress = Math.round(doneCount / subs.length * 100);
+                  onUpdate(task.id, { subtasks: subs, progress });
+                };
+                return (
                 <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 0' }} onClick={e => e.stopPropagation()}>
-                  <div 
-                    onClick={() => {
-                      const subs = task.subtasks.map(st => st.id === s.id ? { ...st, done: !st.done } : st);
-                      const doneCount = subs.filter(st => st.done).length;
-                      const progress = Math.round(doneCount / subs.length * 100);
-                      onUpdate(task.id, { subtasks: subs, progress });
-                    }}
-                    style={{ 
-                      width: 14, height: 14, borderRadius: 3, 
-                      border: `1.2px solid ${s.done ? MC[task.assignee] || 'var(--accent)' : 'var(--text-subtle)'}`, 
-                      background: s.done ? (MC[task.assignee] || 'var(--accent)') + '22' : 'transparent', 
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 
+                  <div
+                    onClick={toggleSub}
+                    style={{
+                      width: 14, height: 14, borderRadius: 3,
+                      border: `1.2px solid ${s.done ? MC[task.assignee] || 'var(--accent)' : 'var(--text-subtle)'}`,
+                      background: s.done ? `color-mix(in srgb, ${MC[task.assignee] || 'var(--accent)'}, transparent 85%)` : 'transparent',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0
                     }}
                   >
                     {s.done && <I.Check />}
                   </div>
-                  <span 
-                    onClick={() => {
-                      const subs = task.subtasks.map(st => st.id === s.id ? { ...st, done: !st.done } : st);
-                      const doneCount = subs.filter(st => st.done).length;
-                      const progress = Math.round(doneCount / subs.length * 100);
-                      onUpdate(task.id, { subtasks: subs, progress });
-                    }}
+                  <span
+                    onClick={toggleSub}
                     style={{ fontSize: 12, color: s.done ? 'var(--text-subtle)' : 'var(--text-main)', textDecoration: s.done ? 'line-through' : 'none', cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
                     {s.title}
                   </span>
                 </div>
-              ))}
+                );
+              })}
             </div>}
 
             {task.subtasks?.length > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
@@ -211,11 +220,8 @@ export const CardCol = ({ title, status, tasks, color, collapsed, onToggle, onTa
                 </div>
               )}
               {(() => {
-                  const isBlocked = (task.dependencies || []).some(depId => {
-                    const depTask = tasks.find(x => x.id === depId);
-                    return depTask && depTask.status !== 'completed';
-                  });
-                  return isBlocked ? (
+                  const blocked = isTaskBlocked(task, tasks);
+                  return blocked ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'color-mix(in srgb, var(--prio-critical), transparent 90%)', padding: '2px 6px', borderRadius: 4, border: '1px solid var(--prio-critical)' }}>
                       <div style={{ color: 'var(--prio-critical)', display: 'flex' }}><I.X s={10} /></div>
                       <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--prio-critical)' }}>BLOCKED</span>

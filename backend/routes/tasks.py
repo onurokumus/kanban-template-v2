@@ -1,0 +1,195 @@
+from flask import Blueprint, request, jsonify
+from flask_login import login_required
+from models import db, Task, Subtask, Comment
+import uuid
+
+tasks_bp = Blueprint('tasks', __name__, url_prefix='/api/tasks')
+
+
+# ─── Task CRUD ────────────────────────────────────────────────────────────────
+
+@tasks_bp.route('', methods=['GET'])
+@login_required
+def get_tasks():
+    tasks = Task.query.all()
+    return jsonify([t.to_dict() for t in tasks])
+
+
+@tasks_bp.route('', methods=['POST'])
+@login_required
+def create_task():
+    data = request.get_json()
+    task = Task(
+        id=data.get('id', str(uuid.uuid4())),
+        title=data['title'],
+        desc=data.get('desc', ''),
+        assignee=data.get('assignee', 'Unassigned'),
+        priority=data.get('priority', 'Medium'),
+        tags=data.get('tags', []),
+        status=data.get('status', 'todo'),
+        estHours=data.get('estHours', 0),
+        actualHours=data.get('actualHours', 0),
+        deadline=data.get('deadline'),
+        ganttStart=data.get('ganttStart'),
+        ganttEnd=data.get('ganttEnd'),
+        completedDate=data.get('completedDate'),
+        progress=data.get('progress', 0),
+        isEpic=data.get('isEpic', False),
+        epicId=data.get('epicId'),
+        created=data.get('created'),
+        dependencies=data.get('dependencies', []),
+    )
+
+    # Handle subtask list if provided
+    for i, s in enumerate(data.get('subtasks', [])):
+        task.subtasks.append(Subtask(
+            id=s.get('id', str(uuid.uuid4())),
+            title=s['title'],
+            done=s.get('done', False),
+            ganttStart=s.get('ganttStart'),
+            deadline=s.get('deadline'),
+            sort_order=i,
+        ))
+
+    # Handle comment list if provided
+    for c in data.get('comments', []):
+        task.comments.append(Comment(
+            id=c.get('id', str(uuid.uuid4())),
+            author=c['author'],
+            text=c['text'],
+            ts=c['ts'],
+            lastEdited=c.get('lastEdited'),
+            reactions=c.get('reactions', {}),
+        ))
+
+    db.session.add(task)
+    db.session.commit()
+    return jsonify(task.to_dict()), 201
+
+
+@tasks_bp.route('/<task_id>', methods=['PUT'])
+@login_required
+def update_task(task_id):
+    task = Task.query.get_or_404(task_id)
+    data = request.get_json()
+
+    # Update simple scalar fields
+    simple_fields = [
+        'title', 'desc', 'assignee', 'priority', 'tags', 'status',
+        'estHours', 'actualHours', 'deadline', 'ganttStart', 'ganttEnd',
+        'completedDate', 'progress', 'isEpic', 'epicId', 'dependencies'
+    ]
+    for field in simple_fields:
+        if field in data:
+            setattr(task, field, data[field])
+
+    db.session.commit()
+    return jsonify(task.to_dict())
+
+
+@tasks_bp.route('/<task_id>', methods=['DELETE'])
+@login_required
+def delete_task(task_id):
+    task = Task.query.get_or_404(task_id)
+    db.session.delete(task)
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+# ─── Subtask CRUD ─────────────────────────────────────────────────────────────
+
+@tasks_bp.route('/<task_id>/subtasks', methods=['POST'])
+@login_required
+def add_subtask(task_id):
+    task = Task.query.get_or_404(task_id)
+    data = request.get_json()
+    max_order = max((s.sort_order for s in task.subtasks), default=-1)
+    sub = Subtask(
+        id=data.get('id', str(uuid.uuid4())),
+        task_id=task_id,
+        title=data['title'],
+        done=data.get('done', False),
+        ganttStart=data.get('ganttStart'),
+        deadline=data.get('deadline'),
+        sort_order=max_order + 1,
+    )
+    db.session.add(sub)
+    db.session.commit()
+    return jsonify(sub.to_dict()), 201
+
+
+@tasks_bp.route('/<task_id>/subtasks/<sub_id>', methods=['PUT'])
+@login_required
+def update_subtask(task_id, sub_id):
+    sub = Subtask.query.filter_by(id=sub_id, task_id=task_id).first_or_404()
+    data = request.get_json()
+    for field in ['title', 'done', 'ganttStart', 'deadline']:
+        if field in data:
+            setattr(sub, field, data[field])
+    db.session.commit()
+    return jsonify(sub.to_dict())
+
+
+@tasks_bp.route('/<task_id>/subtasks/<sub_id>', methods=['DELETE'])
+@login_required
+def delete_subtask(task_id, sub_id):
+    sub = Subtask.query.filter_by(id=sub_id, task_id=task_id).first_or_404()
+    db.session.delete(sub)
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+@tasks_bp.route('/<task_id>/reorder-subtasks', methods=['PUT'])
+@login_required
+def reorder_subtasks(task_id):
+    Task.query.get_or_404(task_id)
+    data = request.get_json()
+    order = data.get('order', [])  # List of subtask IDs in new order
+    for i, sid in enumerate(order):
+        sub = Subtask.query.get(sid)
+        if sub and sub.task_id == task_id:
+            sub.sort_order = i
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+# ─── Comment CRUD ─────────────────────────────────────────────────────────────
+
+@tasks_bp.route('/<task_id>/comments', methods=['POST'])
+@login_required
+def add_comment(task_id):
+    Task.query.get_or_404(task_id)
+    data = request.get_json()
+    comment = Comment(
+        id=data.get('id', str(uuid.uuid4())),
+        task_id=task_id,
+        author=data['author'],
+        text=data['text'],
+        ts=data['ts'],
+        lastEdited=data.get('lastEdited'),
+        reactions=data.get('reactions', {}),
+    )
+    db.session.add(comment)
+    db.session.commit()
+    return jsonify(comment.to_dict()), 201
+
+
+@tasks_bp.route('/<task_id>/comments/<comment_id>', methods=['PUT'])
+@login_required
+def update_comment(task_id, comment_id):
+    comment = Comment.query.filter_by(id=comment_id, task_id=task_id).first_or_404()
+    data = request.get_json()
+    for field in ['text', 'lastEdited', 'reactions']:
+        if field in data:
+            setattr(comment, field, data[field])
+    db.session.commit()
+    return jsonify(comment.to_dict())
+
+
+@tasks_bp.route('/<task_id>/comments/<comment_id>', methods=['DELETE'])
+@login_required
+def delete_comment(task_id, comment_id):
+    comment = Comment.query.filter_by(id=comment_id, task_id=task_id).first_or_404()
+    db.session.delete(comment)
+    db.session.commit()
+    return jsonify({'ok': True})

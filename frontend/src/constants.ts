@@ -53,6 +53,12 @@ export const diffD = (a: Date | string, b: Date | string): number => {
   return Math.round((db.getTime() - da.getTime()) / 864e5);
 };
 
+export const isTaskBlocked = (task: Task, allTasks: Task[]): boolean =>
+  (task.dependencies || []).some(depId => {
+    const dep = allTasks.find(x => x.id === depId);
+    return dep && dep.status !== 'completed';
+  });
+
 let _id = 200;
 export const uid = (): string => `t${_id++}`;
 export const sid = (): string => `s${_id++}`;
@@ -74,15 +80,32 @@ export const initTasks = (): Task[] => [
     dependencies: [], progress: 33 
   },
   { 
-    id: uid(), title: "Vibration Suppression System", desc: "Optimize active vibration control parameters for GOKBEY airframe.", 
+    id: "epic-vib-sup", title: "Vibration Suppression System", desc: "Optimize active vibration control parameters for GOKBEY airframe.", 
     assignee: "Onur", priority: "Medium", tags: ["GOKBEY"], status: "inprogress", estHours: 8, deadline: "2026-03-20", ganttStart: "2026-03-12", ganttEnd: "2026-03-20", 
     comments: [], created: "2026-03-11", 
-    subtasks: [
-      { id: sid(), title: "Sensor placement", done: true, ganttStart: "2026-03-12", deadline: "2026-03-14" }, 
-      { id: sid(), title: "Actuator tuning", done: true, ganttStart: "2026-03-15", deadline: "2026-03-17" }, 
-      { id: sid(), title: "Software validation", done: false, ganttStart: "2026-03-18", deadline: "2026-03-20" }
-    ], 
+    isEpic: true,
+    subtasks: [], 
     dependencies: [], progress: 66 
+  },
+  {
+    id: uid(), epicId: "epic-vib-sup", title: "Sensor placement", desc: "Determine optimal sensor layout.", 
+    assignee: "Onur", priority: "Medium", tags: ["GOKBEY"], status: "completed", estHours: 2, deadline: "2026-03-14", ganttStart: "2026-03-12", ganttEnd: "2026-03-14", 
+    comments: [], created: "2026-03-11", completedDate: "2026-03-14", subtasks: [], dependencies: [], progress: 100
+  },
+  {
+    id: uid(), epicId: "epic-vib-sup", title: "Actuator tuning", desc: "Tune the actuators for maximum efficiency.", 
+    assignee: "Onur", priority: "Medium", tags: ["GOKBEY"], status: "completed", estHours: 3, deadline: "2026-03-17", ganttStart: "2026-03-15", ganttEnd: "2026-03-17", 
+    comments: [], created: "2026-03-11", completedDate: "2026-03-17", subtasks: [], dependencies: [], progress: 100
+  },
+  {
+    id: uid(), epicId: "epic-vib-sup", title: "Software validation", desc: "Validate control software outputs.", 
+    assignee: "Onur", priority: "Medium", tags: ["GOKBEY"], status: "inprogress", estHours: 3, deadline: "2026-03-20", ganttStart: "2026-03-18", ganttEnd: "2026-03-20", 
+    comments: [], created: "2026-03-11", subtasks: [], dependencies: [], progress: 20
+  },
+  {
+    id: uid(), epicId: "epic-vib-sup", title: "Data Analysis", desc: "Analyze the output telemetry data.", 
+    assignee: "Onur", priority: "High", tags: ["GOKBEY"], status: "inprogress", estHours: 5, deadline: "2026-03-22", ganttStart: "2026-03-19", ganttEnd: "2026-03-22", 
+    comments: [], created: "2026-03-11", subtasks: [], dependencies: [], progress: 10
   },
   { id: uid(), title: "Flight Control Law Update", desc: "Implement new control laws for transition flight in EVTOL prototype.", assignee: "Mustafa", priority: "Critical", tags: ["EVTOL"], status: "inprogress", estHours: 6, deadline: "2026-03-20", ganttStart: "2026-03-14", ganttEnd: "2026-03-20", comments: [], created: "2026-03-13", subtasks: [], dependencies: [], progress: 20 },
   { id: uid(), title: "Stability Derivative Extraction", desc: "Extract lateral stability derivatives from wind tunnel data.", assignee: "Enes", priority: "Medium", tags: ["KIHA"], status: "inprogress", estHours: 12, deadline: "2026-03-25", ganttStart: "2026-03-15", ganttEnd: "2026-03-25", comments: [], created: "2026-03-12", subtasks: [], dependencies: [], progress: 30 },

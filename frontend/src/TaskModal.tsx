@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, type CSSProperties } from "react";
 import type { Task } from "./types.ts";
-import { MEMBERS, PRIORITIES, TAGS, MC, PC, TC, TCT, coid, sid, fmt, today, addD } from "./constants.ts";
+import { MEMBERS, PRIORITIES, TAGS, MC, PC, TC, TCT, coid, sid, fmt, today, addD, uid } from "./constants.ts";
 import { I, Av } from "./Icons.tsx";
 import { DatePicker } from "./DatePicker.tsx";
 import { ConfirmDialog } from "./ConfirmDialog.tsx";
@@ -13,11 +13,28 @@ interface Props {
   onDelete: (id: string) => void;
   allTasks: Task[];
   toast: (msg: string, color?: string) => void;
+  onAdd?: (task: Task) => void;
+  onTaskClick?: (task: Task) => void;
 }
 
 type TabKey = "details" | "subtasks" | "dependencies" | "comments" | "activity";
 
-export const TaskModal = ({ task, onClose, onUpdate, onDelete, allTasks, toast }: Props) => {
+const timeAgo = (date: string) => {
+  const seconds = Math.floor((new Date().getTime() - new Date(date).getTime()) / 1000);
+  let interval = seconds / 31536000;
+  if (interval > 1) return Math.floor(interval) + "y ago";
+  interval = seconds / 2592000;
+  if (interval > 1) return Math.floor(interval) + "mo ago";
+  interval = seconds / 86400;
+  if (interval > 1) return Math.floor(interval) + "d ago";
+  interval = seconds / 3600;
+  if (interval > 1) return Math.floor(interval) + "h ago";
+  interval = seconds / 60;
+  if (interval > 1) return Math.floor(interval) + "m ago";
+  return "just now";
+};
+
+export const TaskModal = ({ task, onClose, onUpdate, onDelete, allTasks, toast, onAdd, onTaskClick }: Props) => {
   const [tab, setTab] = useState<TabKey>("details");
   const [ef, setEf] = useState<string | null>(null);
   const [ev, setEv] = useState("");
@@ -39,8 +56,8 @@ export const TaskModal = ({ task, onClose, onUpdate, onDelete, allTasks, toast }
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const h = (e: MouseEvent) => { 
-      if (ref.current && !ref.current.contains(e.target as Node) && !(e.target as Element).closest('.portal-node')) onClose(); 
+    const h = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node) && !(e.target as Element).closest('.portal-node')) onClose();
     };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
@@ -97,12 +114,13 @@ export const TaskModal = ({ task, onClose, onUpdate, onDelete, allTasks, toast }
   const handleCommentInput = (val: string, isEdit = false) => {
     if (isEdit) setEditVal(val); else setCt(val);
     const lastAt = val.lastIndexOf('@');
-    if (lastAt >= 0 && lastAt === val.length - 1) { setShowMentions(true); }
+    let shouldShow = false;
+    if (lastAt >= 0 && lastAt === val.length - 1) { shouldShow = true; }
     else if (lastAt >= 0) {
       const after = val.slice(lastAt + 1);
-      if (!after.includes(' ') && after.length < 15) setShowMentions(true);
-      else setShowMentions(false);
-    } else setShowMentions(false);
+      if (!after.includes(' ') && after.length < 15) shouldShow = true;
+    }
+    if (shouldShow !== showMentions) setShowMentions(shouldShow);
   };
 
   const insertMention = (name: string) => {
@@ -127,12 +145,37 @@ export const TaskModal = ({ task, onClose, onUpdate, onDelete, allTasks, toast }
   };
 
   const addSub = (title: string) => {
-    const subs = [...(task.subtasks || []), { 
-      id: sid(), 
-      title, 
-      done: false, 
-      ganttStart: task.ganttStart || fmt(today), 
-      deadline: task.deadline || fmt(addD(today, 1)) 
+    if (task.isEpic && onAdd) {
+      const newTask: Task = {
+        id: uid(),
+        title,
+        desc: '',
+        assignee: task.assignee, // Default to epic owner
+        priority: 'Medium',
+        status: 'todo',
+        tags: [],
+        estHours: 8,
+        ganttStart: fmt(today),
+        deadline: fmt(addD(today, 7)),
+        created: fmt(today),
+        subtasks: [],
+        comments: [],
+        dependencies: [],
+        progress: 0,
+        epicId: task.id
+      };
+      onAdd(newTask);
+      setShowSubModal(false);
+      toast('Task added to Epic', '#4ec9b0');
+      return;
+    }
+
+    const subs = [...(task.subtasks || []), {
+      id: sid(),
+      title,
+      done: false,
+      ganttStart: task.ganttStart || fmt(today),
+      deadline: task.deadline || fmt(addD(today, 1))
     }];
     const doneCount = subs.filter(s => s.done).length;
     const progress = Math.round(doneCount / subs.length * 100);
@@ -199,32 +242,17 @@ export const TaskModal = ({ task, onClose, onUpdate, onDelete, allTasks, toast }
     </div>
   );
 
-  const timeAgo = (date: string) => {
-    const seconds = Math.floor((new Date().getTime() - new Date(date).getTime()) / 1000);
-    let interval = seconds / 31536000;
-    if (interval > 1) return Math.floor(interval) + "y ago";
-    interval = seconds / 2592000;
-    if (interval > 1) return Math.floor(interval) + "mo ago";
-    interval = seconds / 86400;
-    if (interval > 1) return Math.floor(interval) + "d ago";
-    interval = seconds / 3600;
-    if (interval > 1) return Math.floor(interval) + "h ago";
-    interval = seconds / 60;
-    if (interval > 1) return Math.floor(interval) + "m ago";
-    return "just now";
-  };
-
   const renderComment = (text: string) => {
     const mentionRegex = /(@\w+)/g;
     const processInlines = (t: string) => {
       let parts: (string | React.ReactNode)[] = [t];
-      parts = parts.flatMap(p => typeof p === 'string' ? p.split(mentionRegex).map((sub, i) => 
+      parts = parts.flatMap(p => typeof p === 'string' ? p.split(mentionRegex).map((sub, i) =>
         sub.startsWith('@') ? <span key={i} style={{ color: MC[sub.slice(1)] || 'var(--accent)', fontWeight: 600 }}>{sub}</span> : sub
       ) : p);
-      parts = parts.flatMap(p => typeof p === 'string' ? p.split(/(\*\*.*?\*\*)/g).map((sub, i) => 
+      parts = parts.flatMap(p => typeof p === 'string' ? p.split(/(\*\*.*?\*\*)/g).map((sub, i) =>
         sub.startsWith('**') && sub.endsWith('**') ? <strong key={i} style={{ color: 'var(--text-main)' }}>{sub.slice(2, -2)}</strong> : sub
       ) : p);
-      parts = parts.flatMap(p => typeof p === 'string' ? p.split(/(\*.*?\*)/g).map((sub, j) => 
+      parts = parts.flatMap(p => typeof p === 'string' ? p.split(/(\*.*?\*)/g).map((sub, j) =>
         sub.startsWith('*') && !sub.startsWith('**') && sub.endsWith('*') ? <em key={j}>{sub.slice(1, -1)}</em> : sub
       ) : p);
       return parts;
@@ -236,7 +264,7 @@ export const TaskModal = ({ task, onClose, onUpdate, onDelete, allTasks, toast }
       if (b.startsWith('```') && b.endsWith('```')) {
         return <pre key={i} style={{ background: 'var(--bg)', padding: '10px 14px', borderRadius: 6, fontSize: 13, fontFamily: 'monospace', color: 'var(--text-dim)', overflowX: 'auto', margin: '8px 0', border: '1px solid var(--border)', lineHeight: 1.5 }}>{b.slice(3, -3).trim()}</pre>;
       }
-      
+
       // Images & Links
       const mediaBlocks = b.split(/(!\[.*?\]\(.*?\)|\[.*?\]\(.*?\))/g);
       return mediaBlocks.map((mb, mi) => {
@@ -244,7 +272,7 @@ export const TaskModal = ({ task, onClose, onUpdate, onDelete, allTasks, toast }
         if (imgMatch) return <img key={mi} src={imgMatch[2]} alt={imgMatch[1]} style={{ maxWidth: '100%', borderRadius: 6, marginTop: 8, display: 'block', border: '1px solid var(--border)', boxShadow: '0 4px 12px rgba(0,0,0,.15)' }} />;
         const linkMatch = mb.match(/\[(.*?)\]\((.*?)\)/);
         if (linkMatch) return <a key={mi} href={linkMatch[2]} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'underline', fontWeight: 500 }}>{linkMatch[1]}</a>;
-        
+
         // Lists
         const lines = mb.split('\n');
         return lines.map((l, li) => {
@@ -270,28 +298,30 @@ export const TaskModal = ({ task, onClose, onUpdate, onDelete, allTasks, toast }
         }
         .no-arrows::-webkit-inner-spin-button, .no-arrows::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         .no-arrows { -moz-appearance: textfield; }
-        
-        [data-tooltip] { position: relative; cursor: help; }
-        [data-tooltip]:after {
-          content: attr(data-tooltip);
-          position: absolute; bottom: 125%; left: 50%; transform: translateX(-50%);
-          background: var(--popover-bg); color: var(--text-main); border: 1px solid var(--border);
-          padding: 6px 12px; border-radius: 8px; font-size: 11px; font-weight: 600;
-          white-space: nowrap; visibility: hidden; opacity: 0; transition: all 0.15s ease-out;
-          box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 20000;
-          pointer-events: none;
-        }
-        [data-tooltip]:hover:after { visibility: visible; opacity: 1; bottom: 115%; }
       `}</style>
-      <div ref={ref} style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 10, width: 720, height: 640, display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,.45)', animation: 'slideIn .2s ease-out' }}>
+      <div ref={ref} style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 10, width: 720, height: '65vh', maxHeight: 750, display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,.45)', animation: 'slideIn .2s ease-out' }}>
         {/* Header */}
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ color: '#fff', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', background: PC[task.priority], padding: '4px 10px', borderRadius: 4 }}>{task.priority}</span>
           <span style={{ color: 'var(--text-main)', fontSize: 18, fontWeight: 700, flex: 1, letterSpacing: '-0.01em' }}>{task.title}</span>
-          <button 
-            onClick={() => setConfirm({ title: 'Delete Task?', msg: 'Are you sure you want to delete this task? This cannot be undone.', onConfirm: () => { onDelete(task.id); onClose(); toast('Task deleted', '#f44747'); } })} 
-            style={{ background: 'color-mix(in srgb, var(--prio-critical), transparent 90%)', border: '1px solid var(--prio-critical)', color: 'var(--prio-critical)', cursor: 'pointer', padding: '8px', borderRadius: 8, display: 'flex', transition: 'all .2s' }} 
-            onMouseEnter={e => { e.currentTarget.style.background = 'var(--prio-critical)'; e.currentTarget.style.color = '#fff'; }} 
+          {task.epicId && (
+            <button
+              onClick={() => {
+                const epic = allTasks.find(t => t.id === task.epicId);
+                if (epic && onTaskClick) onTaskClick(epic);
+              }}
+              style={{ background: 'var(--bg-alt)', border: '1px solid var(--border)', color: 'var(--text-main)', cursor: 'pointer', padding: '8px 12px', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, transition: 'all .2s' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-main)' }}
+              data-tooltip="Back to Epic"
+            >
+              <span style={{ fontSize: 16, fontWeight: 800, color: 'var(--accent)', lineHeight: 1 }}>↑</span>Epic
+            </button>
+          )}
+          <button
+            onClick={() => setConfirm({ title: 'Delete Task?', msg: 'Are you sure you want to delete this task? This cannot be undone.', onConfirm: () => { onDelete(task.id); onClose(); toast('Task deleted', '#f44747'); } })}
+            style={{ background: 'color-mix(in srgb, var(--prio-critical), transparent 90%)', border: '1px solid var(--prio-critical)', color: 'var(--prio-critical)', cursor: 'pointer', padding: '8px', borderRadius: 8, display: 'flex', transition: 'all .2s' }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--prio-critical)'; e.currentTarget.style.color = '#fff'; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'color-mix(in srgb, var(--prio-critical), transparent 90%)'; e.currentTarget.style.color = 'var(--prio-critical)'; }}
             data-tooltip="Delete Task"
           >
@@ -304,11 +334,17 @@ export const TaskModal = ({ task, onClose, onUpdate, onDelete, allTasks, toast }
 
         {/* Tabs */}
         <div style={{ display: 'flex', borderBottom: '1px solid var(--border-subtle)', padding: '0 20px' }}>
-          {(["details", "subtasks", "dependencies", "comments", "activity"] as TabKey[]).map(t => (
-            <button key={t} onClick={() => setTab(t)} style={{ padding: '9px 14px', background: 'none', border: 'none', borderBottom: tab === t ? '2px solid var(--accent)' : '2px solid transparent', color: tab === t ? 'var(--text-main)' : 'var(--text-dim)', fontSize: 13, fontWeight: 500, cursor: 'pointer', textTransform: 'capitalize', marginBottom: -1 }}>
-              {t}{t === 'comments' ? ` (${(task.comments || []).length})` : t === 'subtasks' ? ` (${(task.subtasks || []).filter(s => s.done).length}/${(task.subtasks || []).length})` : t === 'dependencies' ? ` (${(task.dependencies || []).length})` : ''}
-            </button>
-          ))}
+          {(["details", "subtasks", "dependencies", "comments", "activity"] as TabKey[]).map(t => {
+            const label = t === 'subtasks' ? (task.isEpic ? 'Tasks' : 'Subtasks') : t;
+            const count = t === 'comments' ? ` (${(task.comments || []).length})`
+              : t === 'subtasks' ? (task.isEpic ? ` (${allTasks.filter(ct => ct.epicId === task.id).length})` : ` (${(task.subtasks || []).filter(s => s.done).length}/${(task.subtasks || []).length})`)
+                : t === 'dependencies' ? ` (${(task.dependencies || []).length})` : '';
+            return (
+              <button key={t} onClick={() => setTab(t)} style={{ padding: '9px 14px', background: 'none', border: 'none', borderBottom: tab === t ? '2px solid var(--accent)' : '2px solid transparent', color: tab === t ? 'var(--text-main)' : 'var(--text-dim)', fontSize: 13, fontWeight: 500, cursor: 'pointer', textTransform: 'capitalize', marginBottom: -1 }}>
+                {label}{count}
+              </button>
+            );
+          })}
         </div>
 
         {/* Content */}
@@ -326,7 +362,58 @@ export const TaskModal = ({ task, onClose, onUpdate, onDelete, allTasks, toast }
             {fieldR('Description', 'desc', task.desc, 'ta')}
             {fieldR('Assignee', 'assignee', task.assignee, 'sm')}
             {fieldR('Priority', 'priority', task.priority, 'sp')}
-            
+
+            {/* Dates — Start Date before Deadline */}
+            <div style={{ opacity: task.isEpic ? 0.3 : 1, pointerEvents: task.isEpic ? 'none' : 'auto', transition: 'opacity .2s' }}>
+              {task.status === 'inprogress' && fieldR('Start Date', 'ganttStart', task.ganttStart || '', 'date')}
+              {fieldR('Deadline', 'deadline', task.deadline || '', 'date')}
+            </div>
+
+            {/* Progress — frequently updated, right after dates */}
+            <div style={{ padding: '7px 0', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ width: 105, flexShrink: 0, color: 'var(--text-subtle)', fontSize: 13 }}>Progress</span>
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 12 }}>
+                <input
+                  type="range"
+                  data-tooltip="Adjust Progress"
+                  min="0"
+                  max="100"
+                  value={task.progress || 0}
+                  onChange={e => onUpdate(task.id, { progress: +e.target.value })}
+                  style={{
+                    flex: 1,
+                    accentColor: 'var(--accent)',
+                    cursor: 'pointer'
+                  }}
+                />
+                <div style={{ position: 'relative', width: 60 }}>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={task.progress || 0}
+                    onChange={e => onUpdate(task.id, { progress: Math.min(100, Math.max(0, +e.target.value)) })}
+                    className="no-arrows"
+                    style={{
+                      width: '100%',
+                      background: 'var(--bg-alt)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 4,
+                      padding: '2px 20px 2px 6px',
+                      fontSize: 12,
+                      color: 'var(--text-main)',
+                      outline: 'none',
+                      textAlign: 'right',
+                      appearance: 'none',
+                      MozAppearance: 'textfield'
+                    }}
+                  />
+                  <span style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: 'var(--text-subtle)', pointerEvents: 'none' }}>%</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Work Log — time tracking, relates to progress */}
             <div style={{ display: 'flex', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid var(--border-subtle)', gap: 10 }}>
               <span style={{ width: 105, flexShrink: 0, color: 'var(--text-subtle)', fontSize: 13 }}>Work Log</span>
               <div style={{ display: 'flex', gap: 10, flex: 1 }}>
@@ -355,8 +442,7 @@ export const TaskModal = ({ task, onClose, onUpdate, onDelete, allTasks, toast }
               </div>
             </div>
 
-            {fieldR('Deadline', 'deadline', task.deadline, 'date')}
-            {task.status === 'inprogress' && fieldR('Start Date', 'ganttStart', task.ganttStart || '', 'date')}
+            {/* Tags — categorization */}
             <div style={{ padding: '7px 0', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
               <span style={{ width: 105, flexShrink: 0, color: 'var(--text-subtle)', fontSize: 13 }}>Tags</span>
               <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>{TAGS.map(t => {
@@ -365,48 +451,36 @@ export const TaskModal = ({ task, onClose, onUpdate, onDelete, allTasks, toast }
               })}</div>
             </div>
 
-            <div style={{ padding: '7px 0', display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ width: 105, flexShrink: 0, color: 'var(--text-subtle)', fontSize: 13 }}>Progress</span>
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 12 }}>
-                <input 
-                  type="range" 
-                  data-tooltip="Settings & Export"
-                  min="0" 
-                  max="100" 
-                  value={task.progress || 0} 
-                  onChange={e => onUpdate(task.id, { progress: +e.target.value })} 
-                  style={{ 
-                    flex: 1, 
-                    accentColor: 'var(--accent)',
-                    cursor: 'pointer'
-                  }} 
-                />
-                <div style={{ position: 'relative', width: 60 }}>
-                  <input 
-                    type="number" 
-                    min="0" 
-                    max="100" 
-                    value={task.progress || 0} 
-                    onChange={e => onUpdate(task.id, { progress: Math.min(100, Math.max(0, +e.target.value)) })}
-                    className="no-arrows"
-                    style={{ 
-                      width: '100%', 
-                      background: 'var(--bg-alt)', 
-                      border: '1px solid var(--border)', 
-                      borderRadius: 4, 
-                      padding: '2px 20px 2px 6px', 
-                      fontSize: 12, 
-                      color: 'var(--text-main)', 
-                      outline: 'none',
-                      textAlign: 'right',
-                      appearance: 'none',
-                      MozAppearance: 'textfield'
-                    }} 
-                  />
-                  <span style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: 'var(--text-subtle)', pointerEvents: 'none' }}>%</span>
-                </div>
+            {/* Epic Section — rarely toggled, at the bottom */}
+            <div style={{ margin: '10px 0', padding: '12px 14px', borderRadius: 8, background: task.isEpic ? 'color-mix(in srgb, var(--accent), transparent 88%)' : 'var(--bg-alt)', border: `1px solid ${task.isEpic ? 'var(--accent)' : 'var(--border)'}`, transition: 'all .2s' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <button
+                  onClick={() => {
+                    if (task.isEpic) {
+                      onUpdate(task.id, { isEpic: false, ganttStart: fmt(today), ganttEnd: fmt(addD(today, 7)), deadline: fmt(addD(today, 7)) });
+                    } else {
+                      onUpdate(task.id, { isEpic: true, epicId: undefined, ganttStart: undefined, ganttEnd: undefined, deadline: undefined });
+                    }
+                  }}
+                  style={{ width: 36, height: 20, borderRadius: 10, border: 'none', background: task.isEpic ? 'var(--accent)' : 'var(--border)', cursor: 'pointer', position: 'relative', transition: 'background .2s', flexShrink: 0 }}
+                >
+                  <div style={{ width: 14, height: 14, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: task.isEpic ? 19 : 3, transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.3)' }} />
+                </button>
+                <span style={{ fontSize: 13, color: task.isEpic ? 'var(--accent)' : 'var(--text-dim)', fontWeight: 600 }}>Epic</span>
+                {task.isEpic && <span style={{ fontSize: 10, color: 'var(--accent)', background: 'color-mix(in srgb, var(--accent), transparent 80%)', padding: '2px 8px', borderRadius: 4, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', marginLeft: 'auto' }}>Indefinite Project</span>}
               </div>
+              {!task.isEpic && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border-subtle)' }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-subtle)', flexShrink: 0 }}>Parent Epic</span>
+                  <select value={task.epicId || ''} onChange={e => onUpdate(task.id, { epicId: e.target.value || undefined })} style={{ ...ips, flex: 1, fontSize: 12 }}>
+                    <option value="">None</option>
+                    {allTasks.filter(t => t.isEpic && t.id !== task.id).map(ep => <option key={ep.id} value={ep.id}>{ep.title}</option>)}
+                  </select>
+                </div>
+              )}
             </div>
+
+            {/* Metadata */}
             <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-subtle)', display: 'flex', gap: 12 }}>
               <span>Created: {task.created}</span>
               {task.completedDate && <span>Completed: {task.completedDate}</span>}
@@ -416,67 +490,87 @@ export const TaskModal = ({ task, onClose, onUpdate, onDelete, allTasks, toast }
 
           {tab === 'subtasks' && <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <span style={{ fontSize: 14, color: 'var(--text-subtle)' }}>Track progress with subtasks</span>
+              <span style={{ fontSize: 14, color: 'var(--text-subtle)' }}>{task.isEpic ? 'Track child tasks within this Epic' : 'Track progress with subtasks'}</span>
               <button onClick={() => setShowSubModal(true)} style={{ background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 3, padding: '4px 12px', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}><I.Plus />Add</button>
             </div>
-            {(task.subtasks || []).length > 0 && <div style={{ height: 4, borderRadius: 2, background: 'var(--border)', marginBottom: 12 }}>
-              <div style={{ width: `${task.progress || 0}%`, height: '100%', borderRadius: 2, background: MC[task.assignee], transition: 'width .3s' }} />
-            </div>}
-            {(task.subtasks || []).map(s => {
-              const upDate = (f: 'ganttStart' | 'deadline', v: string) => {
-                const subs = task.subtasks.map(st => st.id === s.id ? { ...st, [f]: v } : st);
-                const u: Partial<Task> = { subtasks: subs };
-                if (task.status === 'inprogress') {
-                  if (f === 'ganttStart' && task.ganttStart && v < task.ganttStart) u.ganttStart = v;
-                  if (f === 'deadline' && task.deadline && v > task.deadline) { u.deadline = v; u.ganttEnd = v; }
-                }
-                onUpdate(task.id, u);
-              };
-              return (
-                <div 
-                  key={s.id} 
-                  draggable
-                  onDragStart={() => setDraggedSubId(s.id)}
-                  onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderTop = '2px solid var(--accent)'; }}
-                  onDragLeave={e => e.currentTarget.style.borderTop = '1px solid var(--border)'}
-                  onDrop={e => { 
-                    e.preventDefault(); 
-                    e.currentTarget.style.borderTop = '1px solid var(--border)';
-                    if (draggedSubId && draggedSubId !== s.id) reorderSubs(draggedSubId, s.id);
-                  }}
-                  style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 14px', borderRadius: 8, background: 'var(--bg-alt)', border: '1px solid var(--border)', marginBottom: 8, transition: 'all .15s', cursor: 'grab' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '4px 0', cursor: 'grab', opacity: 0.3 }}>
-                    <div style={{ width: 10, height: 2, background: 'currentColor' }} />
-                    <div style={{ width: 10, height: 2, background: 'currentColor' }} />
-                    <div style={{ width: 10, height: 2, background: 'currentColor' }} />
-                  </div>
-                  <div 
-                    onClick={() => toggleSub(s.id)}
-                    style={{ width: 18, height: 18, borderRadius: 4, border: `1.5px solid ${s.done ? MC[task.assignee] : 'var(--text-subtle)'}`, background: s.done ? MC[task.assignee] : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2, cursor: 'pointer', color: '#fff' }}>
-                    {s.done && <I.Check s={12} />}
-                  </div>
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
-                    <span 
-                      onClick={() => toggleSub(s.id)}
-                      style={{ fontSize: 14, color: s.done ? 'var(--text-subtle)' : 'var(--text-main)', textDecoration: s.done ? 'line-through' : 'none', cursor: 'pointer', fontWeight: 600, wordBreak: 'break-word' }}>
-                      {s.title}
-                    </span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
-                        <span style={{ fontSize: 9, color: 'var(--text-subtle)', fontWeight: 800, flexShrink: 0 }}>START</span>
-                        <DatePicker value={s.ganttStart || ''} onChange={v => upDate('ganttStart', v)} style={{ height: 26, flex: 1, minWidth: 0 }} />
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
-                        <span style={{ fontSize: 9, color: 'var(--text-subtle)', fontWeight: 800, flexShrink: 0 }}>END</span>
-                        <DatePicker value={s.deadline || ''} onChange={v => upDate('deadline', v)} style={{ height: 26, flex: 1, minWidth: 0 }} />
-                      </div>
+            {task.isEpic ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {allTasks.filter(t => t.epicId === task.id).map(ct => (
+                  <div key={ct.id} onClick={() => onTaskClick?.(ct)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 8, background: 'var(--bg-alt)', border: '1px solid var(--border)', cursor: 'pointer', transition: 'background .15s' }} onMouseEnter={e => e.currentTarget.style.background = 'var(--hover)'} onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-alt)'}>
+                    <div style={{ width: 18, height: 18, borderRadius: 4, border: `1.5px solid ${ct.status === 'completed' ? MC[ct.assignee] : 'var(--text-subtle)'}`, background: ct.status === 'completed' ? MC[ct.assignee] : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#fff' }}>
+                      {ct.status === 'completed' && <I.Check s={12} />}
                     </div>
+                    <span style={{ fontSize: 14, color: ct.status === 'completed' ? 'var(--text-subtle)' : 'var(--text-main)', textDecoration: ct.status === 'completed' ? 'line-through' : 'none', fontWeight: 600, flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ct.title}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}><Av name={ct.assignee} size={20} /><span style={{ fontSize: 11, color: 'var(--text-subtle)' }}>{ct.assignee}</span></div>
+                    <span style={{ fontSize: 10, color: PC[ct.priority], fontWeight: 800, textTransform: 'uppercase', padding: '2px 6px', borderRadius: 4, background: `color-mix(in srgb, ${PC[ct.priority]}, transparent 90%)`, flexShrink: 0 }}>{ct.priority}</span>
+                    <button onClick={(e) => { e.stopPropagation(); setConfirm({ title: 'Remove from Epic?', msg: 'Remove this task from the Epic?', onConfirm: () => { onUpdate(ct.id, { epicId: undefined }); setConfirm(null); toast('Removed from Epic'); } }); }} style={{ background: 'var(--hover)', border: '1px solid var(--border-subtle)', borderRadius: 4, color: 'var(--text-subtle)', cursor: 'pointer', padding: 4, marginLeft: 8 }}><I.Trash s={14} /></button>
                   </div>
-                  <button onClick={() => delSub(s.id)} style={{ background: 'none', border: 'none', color: 'var(--text-subtle)', cursor: 'pointer', padding: 4, borderRadius: 4, marginTop: 2 }} data-tooltip="Remove Subtask" onMouseEnter={e => e.currentTarget.style.color = '#f44747'} onMouseLeave={e => e.currentTarget.style.color = 'var(--text-subtle)'}><I.Trash s={12} /></button>
-                </div>
-              );
-            })}
-            {(task.subtasks || []).length === 0 && <p style={{ color: 'var(--text-subtle)', fontSize: 14, textAlign: 'center', padding: 20 }}>No subtasks. Click "Add" to break this task down.</p>}
+                ))}
+                {allTasks.filter(t => t.epicId === task.id).length === 0 && <p style={{ color: 'var(--text-subtle)', fontSize: 14, textAlign: 'center', padding: 20 }}>No tasks in this Epic. Click "Add" to create one.</p>}
+              </div>
+            ) : (
+              // Classic Subtasks logic
+              <>
+                {(task.subtasks || []).length > 0 && <div style={{ height: 4, borderRadius: 2, background: 'var(--border)', marginBottom: 12 }}>
+                  <div style={{ width: `${task.progress || 0}%`, height: '100%', borderRadius: 2, background: MC[task.assignee], transition: 'width .3s' }} />
+                </div>}
+                {(task.subtasks || []).map(s => {
+                  const upDate = (f: 'ganttStart' | 'deadline', v: string) => {
+                    const subs = task.subtasks.map(st => st.id === s.id ? { ...st, [f]: v } : st);
+                    const u: Partial<Task> = { subtasks: subs };
+                    if (task.status === 'inprogress') {
+                      if (f === 'ganttStart' && task.ganttStart && v < task.ganttStart) u.ganttStart = v;
+                      if (f === 'deadline' && task.deadline && v > task.deadline) { u.deadline = v; u.ganttEnd = v; }
+                    }
+                    onUpdate(task.id, u);
+                  };
+                  return (
+                    <div
+                      key={s.id}
+                      draggable
+                      onDragStart={() => setDraggedSubId(s.id)}
+                      onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderTop = '2px solid var(--accent)'; }}
+                      onDragLeave={e => e.currentTarget.style.borderTop = '1px solid var(--border)'}
+                      onDrop={e => {
+                        e.preventDefault();
+                        e.currentTarget.style.borderTop = '1px solid var(--border)';
+                        if (draggedSubId && draggedSubId !== s.id) reorderSubs(draggedSubId, s.id);
+                      }}
+                      style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 14px', borderRadius: 8, background: 'var(--bg-alt)', border: '1px solid var(--border)', marginBottom: 8, transition: 'all .15s', cursor: 'grab' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '4px 0', cursor: 'grab', opacity: 0.3 }}>
+                        <div style={{ width: 10, height: 2, background: 'currentColor' }} />
+                        <div style={{ width: 10, height: 2, background: 'currentColor' }} />
+                        <div style={{ width: 10, height: 2, background: 'currentColor' }} />
+                      </div>
+                      <div
+                        onClick={() => toggleSub(s.id)}
+                        style={{ width: 18, height: 18, borderRadius: 4, border: `1.5px solid ${s.done ? MC[task.assignee] : 'var(--text-subtle)'}`, background: s.done ? MC[task.assignee] : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2, cursor: 'pointer', color: '#fff' }}>
+                        {s.done && <I.Check s={12} />}
+                      </div>
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
+                        <span
+                          onClick={() => toggleSub(s.id)}
+                          style={{ fontSize: 14, color: s.done ? 'var(--text-subtle)' : 'var(--text-main)', textDecoration: s.done ? 'line-through' : 'none', cursor: 'pointer', fontWeight: 600, wordBreak: 'break-word' }}>
+                          {s.title}
+                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+                            <span style={{ fontSize: 9, color: 'var(--text-subtle)', fontWeight: 800, flexShrink: 0 }}>START</span>
+                            <DatePicker value={s.ganttStart || ''} onChange={v => upDate('ganttStart', v)} style={{ height: 26, flex: 1, minWidth: 0 }} />
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+                            <span style={{ fontSize: 9, color: 'var(--text-subtle)', fontWeight: 800, flexShrink: 0 }}>END</span>
+                            <DatePicker value={s.deadline || ''} onChange={v => upDate('deadline', v)} style={{ height: 26, flex: 1, minWidth: 0 }} />
+                          </div>
+                        </div>
+                      </div>
+                      <button onClick={() => delSub(s.id)} style={{ background: 'none', border: 'none', color: 'var(--text-subtle)', cursor: 'pointer', padding: 4, borderRadius: 4, marginTop: 2 }} data-tooltip="Remove Subtask" onMouseEnter={e => e.currentTarget.style.color = '#f44747'} onMouseLeave={e => e.currentTarget.style.color = 'var(--text-subtle)'}><I.Trash s={12} /></button>
+                    </div>
+                  );
+                })}
+                {(task.subtasks || []).length === 0 && <p style={{ color: 'var(--text-subtle)', fontSize: 14, textAlign: 'center', padding: 20 }}>No subtasks. Click "Add" to break this task down.</p>}
+              </>
+            )}
           </div>}
 
 
@@ -534,7 +628,7 @@ export const TaskModal = ({ task, onClose, onUpdate, onDelete, allTasks, toast }
                       <span style={{ fontSize: 10, color: PC[t.priority], fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em', background: `color-mix(in srgb, ${PC[t.priority]}, transparent 90%)`, padding: '2px 6px', borderRadius: 4 }}>{t.priority}</span>
                     </div>
                   );
-              })}
+                })}
               {allTasks.filter(t => t.id !== task.id && t.title.toLowerCase().includes(depSearch.toLowerCase()) && (depStatus === 'all' || t.status === depStatus)).length === 0 && (
                 <div style={{ textAlign: 'center', padding: 40, border: '1px dashed var(--border)', borderRadius: 8 }}>
                   <p style={{ color: 'var(--text-subtle)', fontSize: 14 }}>No matching tasks found</p>
@@ -620,7 +714,7 @@ export const TaskModal = ({ task, onClose, onUpdate, onDelete, allTasks, toast }
                     )}
                     <div>
                       <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-subtle)', display: 'block', marginBottom: 6 }}>{insertPopup === 'image' ? 'Image URL' : 'URL'}</label>
-                      <input value={popupUrl.startsWith('data:') ? '✓ File uploaded' : popupUrl} onChange={e => setPopupUrl(e.target.value)} placeholder={insertPopup === 'image' ? 'https://example.com/photo.png' : 'https://example.com'} readOnly={popupUrl.startsWith('data:')} autoFocus={insertPopup === 'link'} style={{ width: '100%', background: popupUrl.startsWith('data:') ? 'color-mix(in srgb, var(--accent), transparent 92%)' : 'var(--bg-alt)', color: popupUrl.startsWith('data:') ? 'var(--accent)' : 'var(--text-dim)', border: `1.5px solid ${popupUrl.startsWith('data:') ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 6, padding: '8px 12px', fontSize: 14, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', transition: 'border-color .2s', fontWeight: popupUrl.startsWith('data:') ? 600 : 400 }} onFocus={e => { if(!popupUrl.startsWith('data:')) e.currentTarget.style.borderColor = 'var(--accent)'; }} onBlur={e => { if(!popupUrl.startsWith('data:')) e.currentTarget.style.borderColor = 'var(--border)'; }} />
+                      <input value={popupUrl.startsWith('data:') ? '✓ File uploaded' : popupUrl} onChange={e => setPopupUrl(e.target.value)} placeholder={insertPopup === 'image' ? 'https://example.com/photo.png' : 'https://example.com'} readOnly={popupUrl.startsWith('data:')} autoFocus={insertPopup === 'link'} style={{ width: '100%', background: popupUrl.startsWith('data:') ? 'color-mix(in srgb, var(--accent), transparent 92%)' : 'var(--bg-alt)', color: popupUrl.startsWith('data:') ? 'var(--accent)' : 'var(--text-dim)', border: `1.5px solid ${popupUrl.startsWith('data:') ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 6, padding: '8px 12px', fontSize: 14, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', transition: 'border-color .2s', fontWeight: popupUrl.startsWith('data:') ? 600 : 400 }} onFocus={e => { if (!popupUrl.startsWith('data:')) e.currentTarget.style.borderColor = 'var(--accent)'; }} onBlur={e => { if (!popupUrl.startsWith('data:')) e.currentTarget.style.borderColor = 'var(--border)'; }} />
                       {popupUrl.startsWith('data:') && <button onClick={() => { setPopupUrl(''); setPopupText(''); }} style={{ background: 'none', border: 'none', color: 'var(--text-subtle)', fontSize: 11, cursor: 'pointer', marginTop: 4, padding: 0 }}>✕ Remove file</button>}
                     </div>
                     <div>
@@ -644,8 +738,8 @@ export const TaskModal = ({ task, onClose, onUpdate, onDelete, allTasks, toast }
             {/* ── Comment Cards ── */}
             {(task.comments || []).slice().reverse().map(c => (
               <div key={c.id} style={{ display: 'flex', gap: 12, padding: 14, marginBottom: 8, borderRadius: 8, background: 'var(--bg-alt)', border: '1px solid var(--border-subtle)', transition: 'border-color .2s, box-shadow .2s' }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,.06)'; const a = e.currentTarget.querySelector('[data-actions]') as HTMLElement; if(a) a.style.opacity = '1'; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.boxShadow = 'none'; const a = e.currentTarget.querySelector('[data-actions]') as HTMLElement; if(a) a.style.opacity = '0'; }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,.06)'; const a = e.currentTarget.querySelector('[data-actions]') as HTMLElement; if (a) a.style.opacity = '1'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.boxShadow = 'none'; const a = e.currentTarget.querySelector('[data-actions]') as HTMLElement; if (a) a.style.opacity = '0'; }}
               >
                 <Av name={c.author} size={32} />
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -656,16 +750,16 @@ export const TaskModal = ({ task, onClose, onUpdate, onDelete, allTasks, toast }
                     <div data-actions style={{ marginLeft: 'auto', display: 'flex', gap: 4, opacity: 0, transition: 'opacity .15s' }}>
                       <button onClick={() => { setEditingId(c.id); setEditVal(c.text); }} style={{ width: 24, height: 24, background: 'var(--hover)', border: '1px solid var(--border-subtle)', borderRadius: 4, color: 'var(--text-subtle)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'color .15s' }}
                         onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent)')} onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-subtle)')} data-tooltip="Edit"><I.Edit /></button>
-                      <button 
-                        onClick={() => setConfirm({ 
-                          title: 'Delete Comment?', 
-                          msg: 'Are you sure you want to delete this comment?', 
-                          onConfirm: () => { 
-                            onUpdate(task.id, { comments: task.comments.filter(x => x.id !== c.id) }); 
+                      <button
+                        onClick={() => setConfirm({
+                          title: 'Delete Comment?',
+                          msg: 'Are you sure you want to delete this comment?',
+                          onConfirm: () => {
+                            onUpdate(task.id, { comments: task.comments.filter(x => x.id !== c.id) });
                             setConfirm(null);
-                            toast('Comment deleted'); 
-                          } 
-                        })} 
+                            toast('Comment deleted');
+                          }
+                        })}
                         style={{ width: 24, height: 24, background: 'var(--hover)', border: '1px solid var(--border-subtle)', borderRadius: 4, color: 'var(--text-subtle)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'color .15s' }}
                         onMouseEnter={e => (e.currentTarget.style.color = '#f44747')} onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-subtle)')} data-tooltip="Delete"><I.Trash /></button>
                     </div>
