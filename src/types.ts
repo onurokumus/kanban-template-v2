@@ -11,6 +11,8 @@ export interface Comment {
   author: string;
   text: string;
   ts: string;
+  lastEdited?: string;
+  reactions?: Record<string, number>;
 }
 
 export interface Task {
@@ -31,6 +33,7 @@ export interface Task {
   ganttStart?: string;
   ganttEnd?: string;
   completedDate?: string;
+  actualHours?: number;
 }
 
 export interface Toast {

@@ -78,62 +78,62 @@ export const StatsPanel = ({ tasks, onClose }: Props) => {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(3px)' }}>
-      <div style={{ background: '#1e1e1e', border: '1px solid #3c3c3c', borderRadius: 8, width: 950, maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,.5)' }}>
-        <div style={{ padding: '14px 20px', borderBottom: '1px solid #2d2d2d', display: 'flex', alignItems: 'center', gap: 12, background: '#1e1e1e', zIndex: 1 }}>
+      <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, width: 950, maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,.5)' }}>
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg)', zIndex: 1 }}>
           <I.Chart />
-          <span style={{ color: '#d4d4d4', fontSize: 16, fontWeight: 600, flex: 1 }}>Kezban Analytics</span>
-          <div style={{ display: 'flex', background: '#252526', padding: 2, borderRadius: 6, border: '1px solid #3c3c3c' }}>
+          <span style={{ color: 'var(--text-main)', fontSize: 16, fontWeight: 600, flex: 1 }}>Kezban Analytics</span>
+          <div style={{ display: 'flex', background: 'var(--bg-alt)', padding: 2, borderRadius: 6, border: '1px solid var(--border)' }}>
             {(["overview", "burndown", "heatmap", "tags"] as ViewKey[]).map(v => (
-              <button key={v} onClick={() => setView(v)} style={{ padding: '5px 14px', borderRadius: 4, border: 'none', background: view === v ? '#007acc' : 'transparent', color: view === v ? '#fff' : '#888', fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', textTransform: 'capitalize', transition: 'all .2s' }}>{v}</button>
+              <button key={v} onClick={() => setView(v)} style={{ padding: '5px 14px', borderRadius: 4, border: 'none', background: view === v ? 'var(--accent)' : 'transparent', color: view === v ? '#fff' : 'var(--text-dim)', fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', textTransform: 'capitalize', transition: 'all .2s' }}>{v}</button>
             ))}
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', marginLeft: 8, padding: 4 }}><I.X /></button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', marginLeft: 8, padding: 4 }}><I.X /></button>
         </div>
 
         <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
-            {[{ l: 'Total Tasks', v: tasks.length, c: '#569cd6', sub: 'Project Scope' },
-            { l: 'Pending', v: tasks.filter(t => t.status !== 'completed').length, c: '#dcdcaa', sub: 'Remaining' },
-            { l: 'Active', v: tasks.filter(t => t.status === 'inprogress').length, c: '#007acc', sub: 'Current Work' },
-            { l: 'Done', v: tasks.filter(t => t.status === 'completed').length, c: '#4ec9b0', sub: 'Finished' }].map(s => (
-              <div key={s.l} style={{ background: '#252526', borderRadius: 8, padding: '14px', border: '1px solid #3c3c3c', position: 'relative', overflow: 'hidden' }}>
+            {[{ l: 'Total Tasks', v: tasks.length, c: 'var(--accent)', sub: 'Project Scope' },
+            { l: 'Pending', v: tasks.filter(t => t.status !== 'completed').length, c: 'var(--prio-medium)', sub: 'Remaining' },
+            { l: 'Active', v: tasks.filter(t => t.status === 'inprogress').length, c: 'var(--accent)', sub: 'Current Work' },
+            { l: 'Done', v: tasks.filter(t => t.status === 'completed').length, c: 'var(--accent-purple)', sub: 'Finished' }].map(s => (
+              <div key={s.l} style={{ background: 'var(--bg-card)', borderRadius: 8, padding: '14px', border: '1px solid var(--border)', position: 'relative', overflow: 'hidden' }}>
                 <div style={{ position: 'absolute', top: 0, left: 0, width: 3, height: '100%', background: s.c }} />
-                <div style={{ color: '#888', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.08em', fontWeight: 600 }}>{s.l}</div>
+                <div style={{ color: 'var(--text-subtle)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.08em', fontWeight: 600 }}>{s.l}</div>
                 <div style={{ color: s.c, fontSize: 28, fontWeight: 700, marginTop: 4 }}>{s.v}</div>
-                <div style={{ color: '#555', fontSize: 11, marginTop: 2 }}>{s.sub}</div>
+                <div style={{ color: 'var(--text-dim)', fontSize: 11, marginTop: 2 }}>{s.sub}</div>
               </div>
             ))}
           </div>
 
           {view === 'overview' && <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {memberStats.map(s => (
-              <div key={s.name} style={{ background: '#252526', borderRadius: 8, padding: '16px', border: '1px solid #2d2d2d', transition: 'border-color .2s' }}
-                onMouseEnter={e => e.currentTarget.style.borderColor = '#007acc55'}
-                onMouseLeave={e => e.currentTarget.style.borderColor = '#2d2d2d'}>
+              <div key={s.name} style={{ background: 'var(--bg-alt)', borderRadius: 8, padding: '16px', border: '1px solid var(--border-subtle)', transition: 'border-color .2s' }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent)55'}
+                onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border-subtle)'}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 12 }}>
                   <Av name={s.name} size={40} />
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ color: '#d4d4d4', fontSize: 15, fontWeight: 600 }}>{s.name}</span>
-                      <span style={{ fontSize: 11, color: '#666', background: '#1e1e1e', padding: '2px 6px', borderRadius: 10 }}>{s.total} Tasks</span>
+                      <span style={{ color: 'var(--text-main)', fontSize: 15, fontWeight: 600 }}>{s.name}</span>
+                      <span style={{ fontSize: 11, color: 'var(--text-dim)', background: 'var(--bg)', padding: '2px 6px', borderRadius: 10 }}>{s.total} Tasks</span>
                     </div>
-                    <div style={{ color: '#888', fontSize: 12, marginTop: 2 }}>{s.totalH}h Estimated · {s.doneH}h Completed ({Math.round(s.doneH / s.totalH * 100 || 0)}%)</div>
+                    <div style={{ color: 'var(--text-dim)', fontSize: 12, marginTop: 2 }}>{s.totalH}h Estimated · {s.doneH}h Completed ({Math.round(s.doneH / s.totalH * 100 || 0)}%)</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ color: s.vel >= 60 ? '#4ec9b0' : s.vel >= 30 ? '#dcdcaa' : '#f44747', fontSize: 22, fontWeight: 800 }}>{s.vel}%</div>
-                    <div style={{ color: '#555', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.1em' }}>Efficiency</div>
+                    <div style={{ color: 'var(--text-subtle)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.1em' }}>Efficiency</div>
                   </div>
                   {s.overdue > 0 && <div style={{ background: '#f4474718', color: '#f44747', fontSize: 12, padding: '4px 10px', borderRadius: 4, transform: 'rotate(2deg)', border: '1px solid #f4474744', fontWeight: 600 }}>{s.overdue} Overdue</div>}
                 </div>
-                <div style={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', background: '#111', padding: 1 }}>
+                <div style={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', background: 'var(--bg)', padding: 1, border: '1px solid var(--border-subtle)' }}>
                   {s.done > 0 && <div style={{ flex: s.done, background: '#4ec9b0', transition: 'all .5s' }} title="Done" />}
-                  {s.ip > 0 && <div style={{ flex: s.ip, background: '#007acc', transition: 'all .5s' }} title="In Progress" />}
-                  {s.todo > 0 && <div style={{ flex: s.todo, background: '#dcdcaa22', transition: 'all .5s' }} title="To Do" />}
+                  {s.ip > 0 && <div style={{ flex: s.ip, background: 'var(--accent)', transition: 'all .5s' }} title="In Progress" />}
+                  {s.todo > 0 && <div style={{ flex: s.todo, background: 'var(--hover)', transition: 'all .5s' }} title="To Do" />}
                 </div>
-                <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 12, color: '#888' }}>
+                <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 12, color: 'var(--text-dim)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#4ec9b0' }}>●</span> {s.done} Done</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#007acc' }}>●</span> {s.ip} In Progress</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#444' }}>●</span> {s.todo} Pending</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: 'var(--accent)' }}>●</span> {s.ip} In Progress</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: 'var(--text-subtle)' }}>●</span> {s.todo} Pending</div>
                 </div>
               </div>
             ))}
@@ -141,45 +141,45 @@ export const StatsPanel = ({ tasks, onClose }: Props) => {
 
           {view === 'burndown' && <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <h4 style={{ color: '#d4d4d4', fontSize: 15, fontWeight: 600, margin: 0 }}>Project Burndown</h4>
-              <div style={{ display: 'flex', gap: 4, background: '#252526', padding: 3, borderRadius: 6, border: '1px solid #3c3c3c' }}>
-                <button onClick={() => setSelectedMember('all')} style={{ padding: '3px 10px', borderRadius: 3, border: 'none', background: selectedMember === 'all' ? '#007acc' : '#2d2d2d', color: selectedMember === 'all' ? '#fff' : '#888', fontSize: 11, cursor: 'pointer' }}>Global</button>
+              <h4 style={{ color: 'var(--text-main)', fontSize: 15, fontWeight: 600, margin: 0 }}>Project Burndown</h4>
+              <div style={{ display: 'flex', gap: 4, background: 'var(--bg-alt)', padding: 3, borderRadius: 6, border: '1px solid var(--border)' }}>
+                <button onClick={() => setSelectedMember('all')} style={{ padding: '3px 10px', borderRadius: 3, border: 'none', background: selectedMember === 'all' ? 'var(--accent)' : 'var(--hover)', color: selectedMember === 'all' ? '#fff' : 'var(--text-dim)', fontSize: 11, cursor: 'pointer' }}>Global</button>
                 {MEMBERS.map(m => (
-                  <button key={m} onClick={() => setSelectedMember(m)} style={{ padding: '3px 10px', borderRadius: 3, border: 'none', background: selectedMember === m ? MC[m] : '#2d2d2d', color: selectedMember === m ? '#fff' : '#888', fontSize: 11, cursor: 'pointer' }}>{m}</button>
+                  <button key={m} onClick={() => setSelectedMember(m)} style={{ padding: '3px 10px', borderRadius: 3, border: 'none', background: selectedMember === m ? MC[m] : 'var(--hover)', color: selectedMember === m ? '#fff' : 'var(--text-dim)', fontSize: 11, cursor: 'pointer' }}>{m}</button>
                 ))}
               </div>
             </div>
-            <div style={{ background: '#252526', borderRadius: 8, padding: '24px 16px', border: '1px solid #2d2d2d' }}>
+            <div style={{ background: 'var(--bg-alt)', borderRadius: 8, padding: '24px 16px', border: '1px solid var(--border-subtle)' }}>
               <ResponsiveContainer width="100%" height={320}>
                 <AreaChart data={burndown}>
                   <defs>
                     <linearGradient id="colorRemain" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#007acc" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#007acc" stopOpacity={0} />
+                      <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
-                  <XAxis dataKey="date" stroke="#666" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#666" fontSize={11} tickLine={false} axisLine={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="date" stroke="var(--text-dim)" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis stroke="var(--text-dim)" fontSize={11} tickLine={false} axisLine={false} />
                   <RTooltip
-                    contentStyle={{ background: '#1e1e1e', border: '1px solid #3c3c3c', borderRadius: 8, fontSize: 13, boxShadow: '0 8px 16px rgba(0,0,0,.4)' }}
-                    itemStyle={{ color: '#d4d4d4' }}
-                    labelStyle={{ color: '#888', marginBottom: 4 }}
+                    contentStyle={{ background: 'var(--popover-bg)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, boxShadow: 'var(--shadow)' }}
+                    itemStyle={{ color: 'var(--text-main)' }}
+                    labelStyle={{ color: 'var(--text-dim)', marginBottom: 4 }}
                   />
-                  <Area type="monotone" dataKey="ideal" stroke="#555" fill="transparent" strokeDasharray="5 5" name="Ideal Baseline" />
-                  <Area type="monotone" dataKey="remaining" stroke="#007acc" strokeWidth={3} fillOpacity={1} fill="url(#colorRemain)" name="Remaining Effort" />
+                  <Area type="monotone" dataKey="ideal" stroke="var(--text-subtle)" fill="transparent" strokeDasharray="5 5" name="Ideal Baseline" />
+                  <Area type="monotone" dataKey="remaining" stroke="var(--accent)" strokeWidth={3} fillOpacity={1} fill="url(#colorRemain)" name="Remaining Effort" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
           </div>}
 
           {view === 'heatmap' && <div>
-            <h4 style={{ color: '#d4d4d4', fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Resource Workload Heatmap <span style={{ color: '#888', fontWeight: 400, fontSize: 13 }}>— Daily Active Tasks & Estimated Hours</span></h4>
-            <div style={{ background: '#252526', borderRadius: 8, border: '1px solid #2d2d2d', overflowX: 'auto', padding: '16px', position: 'relative' }} className="stats-scroll">
-              <style>{`.stats-scroll::-webkit-scrollbar { height: 10px; } .stats-scroll::-webkit-scrollbar-thumb { background: #3c3c3c; border-radius: 5px; }`}</style>
+            <h4 style={{ color: 'var(--text-main)', fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Resource Workload Heatmap <span style={{ color: 'var(--text-dim)', fontWeight: 400, fontSize: 13 }}>— Daily Active Tasks & Estimated Hours</span></h4>
+            <div style={{ background: 'var(--bg-alt)', borderRadius: 8, border: '1px solid var(--border-subtle)', overflowX: 'auto', padding: '16px', position: 'relative' }} className="stats-scroll">
+              <style>{`.stats-scroll::-webkit-scrollbar { height: 10px; } .stats-scroll::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 5px; }`}</style>
               <div style={{ display: 'grid', gridTemplateColumns: `100px repeat(${heatmap.length}, minmax(44px, 1fr))`, gap: 4, minWidth: 1200 }}>
                 <div />
-                {heatmap.map((d, i) => <div key={i} style={{ textAlign: 'center', color: '#666', padding: '4px 0', fontSize: 11, fontWeight: 600 }}>{d.date as string}</div>)}
+                {heatmap.map((d, i) => <div key={i} style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '4px 0', fontSize: 11, fontWeight: 600 }}>{d.date as string}</div>)}
 
                 {MEMBERS.map(m => (
                   <Fragment key={m}>
@@ -187,7 +187,11 @@ export const StatsPanel = ({ tasks, onClose }: Props) => {
                     {heatmap.map((d, i) => {
                       const v = (d[m] as number) || 0;
                       const hrs = (d[m + '_hrs'] as number) || 0;
-                      const bg = v === 0 ? '#1a1a1b' : v === 1 ? MC[m] + '15' : v === 2 ? MC[m] + '35' : v === 3 ? MC[m] + '60' : MC[m] + '90';
+                      const bg = v === 0 ? 'var(--bg)' : 
+                                v === 1 ? `color-mix(in srgb, ${MC[m]}, transparent 92%)` : 
+                                v === 2 ? `color-mix(in srgb, ${MC[m]}, transparent 80%)` : 
+                                v === 3 ? `color-mix(in srgb, ${MC[m]}, transparent 60%)` : 
+                                `color-mix(in srgb, ${MC[m]}, transparent 30%)`;
                       const isHigh = hrs > 6;
                       return (
                         <div key={m + i}
@@ -196,9 +200,9 @@ export const StatsPanel = ({ tasks, onClose }: Props) => {
                             setHoveredCell({ member: m, index: i, x: rect.left + rect.width / 2, y: rect.top });
                           }}
                           onMouseLeave={() => setHoveredCell(null)}
-                          style={{ background: bg, borderRadius: 4, height: 42, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: v > 0 ? '#fff' : '#2a2a2a', border: isHigh ? `1px solid ${MC[m]}` : '1px solid transparent', transition: 'all .2s', cursor: 'default' }}>
-                          <span style={{ fontSize: 13, fontWeight: 700 }}>{v > 0 ? v : ''}</span>
-                          {hrs > 0 && <span style={{ fontSize: 9, opacity: 0.8, transform: 'scale(0.8)' }}>{hrs % 1 === 0 ? hrs : hrs.toFixed(1)}h</span>}
+                          style={{ background: bg, borderRadius: 4, height: 42, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: v > 0 ? 'var(--text-main)' : 'var(--text-subtle)', border: isHigh ? `1.5px solid ${MC[m]}` : '1.5px solid var(--border-subtle)', transition: 'all .2s', cursor: 'default' }}>
+                          <span style={{ fontSize: 13, fontWeight: 800, lineHeight: 1.1 }}>{v > 0 ? v : ''}</span>
+                          {hrs > 0 && <span style={{ fontSize: 11, fontWeight: 600, opacity: 0.85, lineHeight: 1 }}>{hrs % 1 === 0 ? hrs : hrs.toFixed(1)}h</span>}
                         </div>
                       );
                     })}
@@ -209,47 +213,47 @@ export const StatsPanel = ({ tasks, onClose }: Props) => {
               {hoveredCell && heatmap[hoveredCell.index] && (
                 <div style={{
                   position: 'fixed', left: hoveredCell.x, top: hoveredCell.y - 10, transform: 'translate(-50%, -100%)',
-                  background: '#252526', border: '1px solid #444', borderRadius: 8, padding: '10px 14px', zIndex: 6000,
-                  pointerEvents: 'none', boxShadow: '0 10px 30px rgba(0,0,0,.6)', minWidth: 200
+                  background: 'var(--popover-bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 16px', zIndex: 6000,
+                  pointerEvents: 'none', boxShadow: 'var(--shadow)', minWidth: 220
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, borderBottom: '1px solid #3c3c3c', paddingBottom: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, borderBottom: '1px solid var(--border-subtle)', paddingBottom: 8 }}>
                     <Av name={hoveredCell.member} size={20} />
-                    <span style={{ color: '#d4d4d4', fontSize: 13, fontWeight: 600 }}>{hoveredCell.member}</span>
-                    <span style={{ color: '#666', fontSize: 11, marginLeft: 'auto' }}>{heatmap[hoveredCell.index].fullDate}</span>
+                    <span style={{ color: 'var(--text-main)', fontSize: 13, fontWeight: 600 }}>{hoveredCell.member}</span>
+                    <span style={{ color: 'var(--text-subtle)', fontSize: 11, marginLeft: 'auto' }}>{heatmap[hoveredCell.index].fullDate}</span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {heatmap[hoveredCell.index][hoveredCell.member + '_tasks'].length > 0 ? (
                       heatmap[hoveredCell.index][hoveredCell.member + '_tasks'].map((t: any, i: number) => (
                         <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-                          <span style={{ color: '#aaa', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
+                          <span style={{ color: 'var(--text-dim)', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
                           <span style={{ color: MC[hoveredCell.member], fontSize: 11, fontWeight: 600 }}>{t.dailyHrs % 1 === 0 ? t.dailyHrs : t.dailyHrs.toFixed(1)}h</span>
                         </div>
                       ))
                     ) : (
-                      <div style={{ color: '#555', fontSize: 12 }}>No active tasks</div>
+                      <div style={{ color: 'var(--text-subtle)', fontSize: 12 }}>No active tasks</div>
                     )}
                   </div>
-                  <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid #3c3c3c', display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
-                    <span style={{ color: '#666' }}>Daily Total:</span>
-                    <span style={{ color: '#fff', fontWeight: 600 }}>{heatmap[hoveredCell.index][hoveredCell.member + '_hrs'].toFixed(1)}h</span>
+                  <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                    <span style={{ color: 'var(--text-subtle)' }}>Daily Total:</span>
+                    <span style={{ color: 'var(--text-main)', fontWeight: 600 }}>{heatmap[hoveredCell.index][hoveredCell.member + '_hrs'].toFixed(1)}h</span>
                   </div>
                 </div>
               )}
             </div>
 
             <div style={{ marginTop: 24 }}>
-              <h4 style={{ color: '#d4d4d4', fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Total Capacity Distribution <span style={{ color: '#888', fontWeight: 400, fontSize: 13 }}>(Project Hours Breakdown)</span></h4>
-              <div style={{ background: '#252526', borderRadius: 8, padding: 16, border: '1px solid #2d2d2d' }}>
+              <h4 style={{ color: 'var(--text-main)', fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Total Capacity Distribution <span style={{ color: 'var(--text-dim)', fontWeight: 400, fontSize: 13 }}>(Project Hours Breakdown)</span></h4>
+              <div style={{ background: 'var(--bg-alt)', borderRadius: 8, padding: 16, border: '1px solid var(--border-subtle)' }}>
                 <ResponsiveContainer width="100%" height={240}>
                   <BarChart data={memberStats}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
-                    <XAxis dataKey="name" stroke="#666" fontSize={11} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#666" fontSize={11} tickLine={false} axisLine={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                    <XAxis dataKey="name" stroke="var(--text-dim)" fontSize={11} tickLine={false} axisLine={false} />
+                    <YAxis stroke="var(--text-dim)" fontSize={11} tickLine={false} axisLine={false} />
                     <RTooltip
-                      contentStyle={{ background: '#1e1e1e', border: '1px solid #3c3c3c', borderRadius: 8, fontSize: 13 }}
-                      itemStyle={{ color: '#d4d4d4' }}
-                      labelStyle={{ color: '#888', marginBottom: 4 }}
-                      cursor={{ fill: '#ffffff05' }}
+                      contentStyle={{ background: 'var(--popover-bg)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, boxShadow: 'var(--shadow)' }}
+                      itemStyle={{ color: 'var(--text-main)' }}
+                      labelStyle={{ color: 'var(--text-dim)', marginBottom: 4 }}
+                      cursor={{ fill: 'color-mix(in srgb, var(--hover), transparent 60%)' }}
                     />
                     <Bar dataKey="totalH" name="Total Est. Hours" radius={[4, 4, 0, 0]}>
                       {memberStats.map((e, i) => <Cell key={i} fill={e.color} fillOpacity={0.8} />)}
@@ -264,35 +268,35 @@ export const StatsPanel = ({ tasks, onClose }: Props) => {
           </div>}
 
           {view === 'tags' && <div>
-            <h4 style={{ color: '#d4d4d4', fontSize: 15, fontWeight: 600, marginBottom: 16 }}>Project Focus & Categorization</h4>
+            <h4 style={{ color: 'var(--text-main)', fontSize: 15, fontWeight: 600, marginBottom: 16 }}>Project Focus & Categorization</h4>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-              <div style={{ background: '#252526', borderRadius: 8, padding: 16, border: '1px solid #2d2d2d' }}>
-                <div style={{ fontSize: 12, color: '#888', marginBottom: 16, textAlign: 'center', textTransform: 'uppercase', letterSpacing: '.05em' }}>Tag Frequency</div>
+              <div style={{ background: 'var(--bg-alt)', borderRadius: 8, padding: 16, border: '1px solid var(--border-subtle)' }}>
+                <div style={{ fontSize: 12, color: 'var(--text-subtle)', marginBottom: 16, textAlign: 'center', textTransform: 'uppercase', letterSpacing: '.05em' }}>Tag Frequency</div>
                 <ResponsiveContainer width="100%" height={260}>
                   <PieChart>
                     <Pie data={tagDist} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} innerRadius={60} strokeWidth={0} paddingAngle={4}>
                       {tagDist.map((_e, i) => <Cell key={i} fill={chartColors[i % chartColors.length]} />)}
                     </Pie>
                     <RTooltip
-                      contentStyle={{ background: '#1e1e1e', border: '1px solid #3c3c3c', borderRadius: 8, fontSize: 13 }}
-                      itemStyle={{ color: '#d4d4d4' }}
-                      labelStyle={{ color: '#888', marginBottom: 4 }}
+                      contentStyle={{ background: 'var(--popover-bg)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, boxShadow: 'var(--shadow)' }}
+                      itemStyle={{ color: 'var(--text-main)' }}
+                      labelStyle={{ color: 'var(--text-dim)', marginBottom: 4 }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              <div style={{ background: '#252526', borderRadius: 8, padding: 16, border: '1px solid #2d2d2d' }}>
-                <div style={{ fontSize: 12, color: '#888', marginBottom: 16, textAlign: 'center', textTransform: 'uppercase', letterSpacing: '.05em' }}>Task Count Distribution</div>
+              <div style={{ background: 'var(--bg-alt)', borderRadius: 8, padding: 16, border: '1px solid var(--border-subtle)' }}>
+                <div style={{ fontSize: 12, color: 'var(--text-subtle)', marginBottom: 16, textAlign: 'center', textTransform: 'uppercase', letterSpacing: '.05em' }}>Task Count Distribution</div>
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={tagDist}>
-                    <CartesianGrid strokeDasharray="2 2" stroke="#333" vertical={false} />
-                    <XAxis dataKey="name" stroke="#666" fontSize={11} tickLine={false} axisLine={false} height={40} angle={-30} textAnchor="end" />
-                    <YAxis stroke="#666" fontSize={11} tickLine={false} axisLine={false} />
+                    <CartesianGrid strokeDasharray="2 2" stroke="var(--border)" vertical={false} />
+                    <XAxis dataKey="name" stroke="var(--text-dim)" fontSize={11} tickLine={false} axisLine={false} height={40} angle={-30} textAnchor="end" />
+                    <YAxis stroke="var(--text-dim)" fontSize={11} tickLine={false} axisLine={false} />
                     <RTooltip
-                      contentStyle={{ background: '#1e1e1e', border: '1px solid #3c3c3c', borderRadius: 8, fontSize: 13 }}
-                      itemStyle={{ color: '#d4d4d4' }}
-                      labelStyle={{ color: '#888', marginBottom: 4 }}
-                      cursor={{ fill: '#ffffff05' }}
+                      contentStyle={{ background: 'var(--popover-bg)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, boxShadow: 'var(--shadow)' }}
+                      itemStyle={{ color: 'var(--text-main)' }}
+                      labelStyle={{ color: 'var(--text-dim)', marginBottom: 4 }}
+                      cursor={{ fill: 'color-mix(in srgb, var(--hover), transparent 60%)' }}
                     />
                     <Bar dataKey="value" name="Tasks" radius={[4, 4, 0, 0]}>
                       {tagDist.map((_e, i) => <Cell key={i} fill={chartColors[i % chartColors.length]} />)}

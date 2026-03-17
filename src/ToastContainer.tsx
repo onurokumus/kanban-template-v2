@@ -7,11 +7,34 @@ interface Props {
 }
 
 export const ToastContainer = ({ toasts, remove }: Props) => (
-  <div style={{ position: 'fixed', bottom: 36, right: 16, zIndex: 9999, display: 'flex', flexDirection: 'column-reverse', gap: 6, pointerEvents: 'none' }}>
+  <div style={{ position: 'fixed', top: 20, right: 20, zIndex: 10000, display: 'flex', flexDirection: 'column', gap: 10, pointerEvents: 'none' }}>
     {toasts.map(t => (
-      <div key={t.id} style={{ background: '#252526', border: '1px solid #3c3c3c', borderLeft: `3px solid ${t.color || '#007acc'}`, borderRadius: 4, padding: '8px 14px', color: '#d4d4d4', fontSize: 14, boxShadow: '0 4px 16px rgba(0,0,0,.4)', pointerEvents: 'auto', display: 'flex', alignItems: 'center', gap: 8, animation: 'slideIn .2s ease', maxWidth: 320 }}>
-        <span style={{ flex: 1 }}>{t.msg}</span>
-        <button onClick={() => remove(t.id)} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', padding: 0 }}><I.X /></button>
+      <div key={t.id} style={{ 
+        background: 'var(--popover-bg)', 
+        backdropFilter: 'blur(16px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+        border: '1px solid var(--border)',
+        borderLeft: `4px solid ${t.color || 'var(--accent)'}`, 
+        borderRadius: 12, 
+        padding: '14px 20px', 
+        color: 'var(--text-main)', 
+        fontSize: 14, 
+        fontWeight: 500,
+        boxShadow: '0 12px 40px var(--shadow)', 
+        pointerEvents: 'auto', 
+        display: 'flex', 
+        alignItems: 'center', 
+        gap: 14, 
+        animation: 'toastSlideIn .4s cubic-bezier(0.19, 1, 0.22, 1)', 
+        maxWidth: 400,
+        position: 'relative',
+        overflow: 'hidden'
+      }}>
+        <style>{`
+          @keyframes toastSlideIn { from { opacity: 0; transform: translateX(100px); } to { opacity: 1; transform: translateX(0); } }
+        `}</style>
+        <div style={{ flex: 1, lineHeight: 1.5 }}>{t.msg}</div>
+        <button onClick={() => remove(t.id)} style={{ background: 'var(--hover)', border: 'none', color: 'var(--text-subtle)', cursor: 'pointer', padding: 6, borderRadius: 8, display: 'flex', transition: 'all 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = 'var(--text-main)'}><I.X s={12} /></button>
       </div>
     ))}
   </div>

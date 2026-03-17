@@ -2,27 +2,41 @@ import type { Task } from "./types.ts";
 
 export const MEMBERS = ["Unassigned", "Murat", "Onur", "Mustafa", "Enes", "Berk", "İnan", "Fatih", "Muratcan"] as const;
 export const MC: Record<string, string> = { 
-  Murat: "#569cd6", 
-  Onur: "#4ec9b0", 
-  Mustafa: "#ce9178", 
-  Enes: "#dcdcaa", 
-  Berk: "#c586c0", 
-  "İnan": "#9cdcfe", 
-  Fatih: "#d7ba7d", 
-  Muratcan: "#b5cea8",
-  Unassigned: "#888888"
+  Murat: "var(--member-murat)", 
+  Onur: "var(--member-onur)", 
+  Mustafa: "var(--member-mustafa)", 
+  Enes: "var(--member-enes)", 
+  Berk: "var(--member-berk)", 
+  "İnan": "var(--member-inan)", 
+  Fatih: "var(--member-fatih)", 
+  Muratcan: "var(--member-muratcan)",
+  Unassigned: "var(--member-unassigned)"
 };
 export const PRIORITIES = ["Critical", "High", "Medium", "Low"] as const;
-export const PC: Record<string, string> = { Critical: "#f44747", High: "#ff8c00", Medium: "#dcdcaa", Low: "#608b4e" };
+export const PC: Record<string, string> = { 
+  Critical: "var(--prio-critical)", 
+  High: "var(--prio-high)", 
+  Medium: "var(--prio-medium)", 
+  Low: "var(--prio-low)" 
+};
 export const TAGS = ["ATAK", "GOKBEY", "ONTON", "KIHA", "EVTOL", "UCTON", "INFRA"] as const;
 export const TC: Record<string, string> = { 
-  ATAK: "#264f78", 
-  GOKBEY: "#4d3d1a", 
-  ONTON: "#3d2d4d", 
-  KIHA: "#2d4d3d", 
-  EVTOL: "#4d2d2d", 
-  UCTON: "#2d3d4d", 
-  INFRA: "#5c2020" 
+  ATAK: "var(--tag-atak-bg)", 
+  GOKBEY: "var(--tag-gokbey-bg)", 
+  ONTON: "var(--tag-onton-bg)", 
+  KIHA: "var(--tag-kiha-bg)", 
+  EVTOL: "var(--tag-evtol-bg)", 
+  UCTON: "var(--tag-ucton-bg)", 
+  INFRA: "var(--tag-infra-bg)" 
+};
+export const TCT: Record<string, string> = { 
+  ATAK: "var(--tag-atak-text)", 
+  GOKBEY: "var(--tag-gokbey-text)", 
+  ONTON: "var(--tag-onton-text)", 
+  KIHA: "var(--tag-kiha-text)", 
+  EVTOL: "var(--tag-evtol-text)", 
+  UCTON: "var(--tag-ucton-text)", 
+  INFRA: "var(--tag-infra-text)" 
 };
 
 export const ROW_H = 48;
