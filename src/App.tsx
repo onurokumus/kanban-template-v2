@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import type { Task, Toast } from "./types.ts";
-import { MEMBERS, PRIORITIES, TAGS, MC, fmt, today, addD, parse, MILESTONES, initTasks } from "./constants.ts";
+import { MEMBERS, PRIORITIES, TAGS, MC, fmt, today, addD, parse, initTasks } from "./constants.ts";
 import { I, Av } from "./Icons.tsx";
 import { ToastContainer } from "./ToastContainer.tsx";
 import { TaskModal } from "./TaskModal.tsx";
@@ -17,14 +17,16 @@ export default function App() {
   const [showStats, setShowStats] = useState(false);
   const [colC, setColC] = useState({ todo: false, completed: false, ip: false });
   const [search, setSearch] = useState('');
-  const [memberF, setMemberF] = useState('');
-  const [tagF, setTagF] = useState('');
-  const [prioF, setPrioF] = useState('');
+  const [memberF, setMemberF] = useState<string[]>([]);
+  const [tagF, setTagF] = useState<string[]>([]);
+  const [prioF, setPrioF] = useState<string[]>([]);
   const [zoom, setZoom] = useState('day');
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [history, setHistory] = useState<Task[][]>([]);
   const [future, setFuture] = useState<Task[][]>([]);
   const [showFilters, setShowFilters] = useState(false);
+  const [isGanttOver, setIsGanttOver] = useState(false);
+  const ganttDragCounter = useRef(0);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const addToast = useCallback((msg: string, color = '#007acc') => {
@@ -89,11 +91,12 @@ export default function App() {
     return () => window.removeEventListener('keydown', handler);
   }, [undo, redo]);
 
-  const hasFilters = !!(memberF || tagF || prioF || search);
+  const hasFilters = !!(memberF.length || tagF.length || prioF.length || search);
 
   return (
     <div style={{ fontFamily: "'Cascadia Code','Fira Code','Segoe UI',monospace", background: '#1e1e1e', color: '#d4d4d4', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', userSelect: 'none' }}>
       <style>{`
+        * { box-sizing: border-box; }
         @keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
         ::-webkit-scrollbar{width:8px;height:8px}
         ::-webkit-scrollbar-track{background:#1e1e1e}
@@ -104,30 +107,32 @@ export default function App() {
       `}</style>
 
       {/* TOP BAR */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px', height: 42, background: '#252526', borderBottom: '1px solid #3c3c3c', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0 20px', height: 56, background: '#252526', borderBottom: '1px solid #3c3c3c', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{ width: 16, height: 16, borderRadius: 3, background: 'linear-gradient(135deg,#007acc,#0098ff)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontSize: 9, fontWeight: 900, color: '#fff' }}>K</span>
+          <div style={{ width: 16, height: 16, borderRadius: 3, background: 'linear-gradient(135deg,#007acc,#0098ff)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <span style={{ fontSize: 11, fontWeight: 900, color: '#fff', lineHeight: 1 }}>K</span>
           </div>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#d4d4d4', letterSpacing: '-.01em' }}>Project Board</span>
-          <span style={{ fontSize: 10, color: '#666', marginLeft: 2 }}>Sprint 12</span>
+          <span style={{ fontSize: 15, fontWeight: 600, color: '#d4d4d4', letterSpacing: '-.02em', lineHeight: 1 }}>Kezban</span>
+          <div style={{ width: 3, height: 3, borderRadius: '50%', background: '#444', margin: '0 2px' }} />
+          <span style={{ fontSize: 11, color: '#666', fontWeight: 800, letterSpacing: '.05em', lineHeight: 1, marginTop: 1 }}>K11C0</span>
         </div>
 
         <div style={{ width: 1, height: 20, background: '#3c3c3c', margin: '0 4px' }} />
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#1e1e1e', borderRadius: 4, padding: '4px 10px', border: '1px solid #3c3c3c', width: 180 }}>
           <I.Search />
-          <input ref={searchRef} value={search} onChange={e => setSearch(e.target.value)} placeholder="Search... ( / )" style={{ background: 'transparent', border: 'none', outline: 'none', color: '#ccc', fontSize: 11, fontFamily: 'inherit', width: '100%' }} />
+          <input ref={searchRef} value={search} onChange={e => setSearch(e.target.value)} placeholder="Search... ( / )" style={{ background: 'transparent', border: 'none', outline: 'none', color: '#ccc', fontSize: 13, fontFamily: 'inherit', width: '100%' }} />
           {search && <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', padding: 0 }}><I.X /></button>}
         </div>
 
-        <button onClick={() => setShowFilters(!showFilters)} style={{ display: 'flex', alignItems: 'center', gap: 4, background: hasFilters ? '#007acc22' : '#2d2d2d', border: `1px solid ${hasFilters ? '#007acc' : '#3c3c3c'}`, borderRadius: 4, padding: '4px 10px', color: hasFilters ? '#007acc' : '#999', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
-          <I.Filter /> Filters {hasFilters && <span style={{ background: '#007acc', color: '#fff', fontSize: 9, padding: '0 5px', borderRadius: 6, fontWeight: 700 }}>{[memberF, tagF, prioF].filter(Boolean).length}</span>}
+        <button onClick={() => setShowFilters(!showFilters)} style={{ display: 'flex', alignItems: 'center', gap: 4, background: hasFilters ? '#007acc22' : '#2d2d2d', border: `1px solid ${hasFilters ? '#007acc' : '#3c3c3c'}`, borderRadius: 4, padding: '4px 10px', color: hasFilters ? '#007acc' : '#999', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
+          <I.Filter /> Filters {hasFilters && <span style={{ background: '#007acc', color: '#fff', fontSize: 11, padding: '0 5px', borderRadius: 6, fontWeight: 700 }}>{memberF.length + tagF.length + prioF.length + (search ? 1 : 0)}</span>}
         </button>
 
         <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-          <button onClick={() => setZoom('day')} style={{ background: zoom === 'day' ? '#007acc' : '#2d2d2d', border: 'none', borderRadius: '3px 0 0 3px', padding: '4px 8px', color: zoom === 'day' ? '#fff' : '#888', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Day</button>
-          <button onClick={() => setZoom('week')} style={{ background: zoom === 'week' ? '#007acc' : '#2d2d2d', border: 'none', borderRadius: '0 3px 3px 0', padding: '4px 8px', color: zoom === 'week' ? '#fff' : '#888', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Week</button>
+          <button onClick={() => setZoom('day')} style={{ background: zoom === 'day' ? '#007acc' : '#2d2d2d', border: 'none', borderRadius: '3px 0 0 3px', padding: '4px 8px', color: zoom === 'day' ? '#fff' : '#888', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Day</button>
+          <button onClick={() => setZoom('week')} style={{ background: zoom === 'week' ? '#007acc' : '#2d2d2d', border: 'none', borderRadius: 0, padding: '4px 8px', color: zoom === 'week' ? '#fff' : '#888', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Week</button>
+          <button onClick={() => setZoom('month')} style={{ background: zoom === 'month' ? '#007acc' : '#2d2d2d', border: 'none', borderRadius: '0 3px 3px 0', padding: '4px 8px', color: zoom === 'month' ? '#fff' : '#888', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Month</button>
         </div>
 
         <div style={{ display: 'flex', gap: 2 }}>
@@ -138,73 +143,104 @@ export default function App() {
         <div style={{ flex: 1 }} />
 
         <div style={{ display: 'flex', alignItems: 'center' }}>
-          {MEMBERS.map((m, i) => (
-            <div key={m} style={{ marginLeft: i > 0 ? -5 : 0, zIndex: MEMBERS.length - i, cursor: 'pointer', transition: 'transform .15s', border: memberF === m ? '2px solid #007acc' : '2px solid transparent', borderRadius: '50%' }}
-              onClick={() => setMemberF(p => p === m ? '' : m)}
-              onMouseEnter={e => (e.currentTarget.style.transform = 'translateY(-2px)')}
-              onMouseLeave={e => (e.currentTarget.style.transform = '')} title={m}>
-              <Av name={m} size={24} />
-            </div>
-          ))}
+          {MEMBERS.map((m, i) => {
+            const isSel = memberF.includes(m);
+            return (
+              <div key={m} style={{ marginLeft: i > 0 ? -5 : 0, zIndex: MEMBERS.length - i, cursor: 'pointer', transition: 'transform .15s', border: isSel ? '2px solid #007acc' : '2px solid transparent', borderRadius: '50%', background: '#252526' }}
+                onClick={() => setMemberF(p => p.includes(m) ? p.filter(x => x !== m) : [...p, m])}
+                onMouseEnter={e => (e.currentTarget.style.transform = 'translateY(-2px)')}
+                onMouseLeave={e => (e.currentTarget.style.transform = '')} title={m}>
+                <Av name={m} size={24} />
+              </div>
+            );
+          })}
         </div>
 
         <div style={{ width: 1, height: 20, background: '#3c3c3c', margin: '0 2px' }} />
 
-        <button onClick={() => exportCSV(tasks)} style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#2d2d2d', border: '1px solid #3c3c3c', borderRadius: 4, padding: '4px 8px', color: '#ccc', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }} title="Export CSV"><I.DL />CSV</button>
-        <button onClick={() => exportPDF(tasks)} style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#2d2d2d', border: '1px solid #3c3c3c', borderRadius: 4, padding: '4px 8px', color: '#ccc', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }} title="Export PDF"><I.DL />PDF</button>
+        <button onClick={() => exportCSV(tasks)} style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#2d2d2d', border: '1px solid #3c3c3c', borderRadius: 4, padding: '4px 8px', color: '#ccc', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }} title="Export CSV"><I.DL />CSV</button>
+        <button onClick={() => exportPDF(tasks)} style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#2d2d2d', border: '1px solid #3c3c3c', borderRadius: 4, padding: '4px 8px', color: '#ccc', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }} title="Export PDF"><I.DL />PDF</button>
 
-        <button onClick={() => setShowStats(true)} style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#2d2d2d', border: '1px solid #3c3c3c', borderRadius: 4, padding: '4px 10px', color: '#ccc', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}><I.Chart />Stats</button>
-        <button onClick={() => setNewTask('todo')} style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#007acc', border: 'none', borderRadius: 4, padding: '4px 12px', color: '#fff', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}><I.Plus />New <I.Kbd>N</I.Kbd></button>
+        <button onClick={() => setShowStats(true)} style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#2d2d2d', border: '1px solid #3c3c3c', borderRadius: 4, padding: '4px 10px', color: '#ccc', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}><I.Chart />Stats</button>
+        <button onClick={() => setNewTask('todo')} style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#007acc', border: 'none', borderRadius: 4, padding: '4px 12px', color: '#fff', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}><I.Plus />New <I.Kbd>N</I.Kbd></button>
       </div>
 
       {/* FILTER BAR */}
-      {showFilters && <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 14px', background: '#1e1e1e', borderBottom: '1px solid #2d2d2d', flexShrink: 0, animation: 'slideIn .15s ease' }}>
-        <span style={{ fontSize: 10, color: '#888' }}>Filter by:</span>
-        <select value={memberF} onChange={e => setMemberF(e.target.value)} style={{ background: '#2d2d2d', color: '#ccc', border: '1px solid #3c3c3c', borderRadius: 3, padding: '3px 6px', fontSize: 11, outline: 'none', fontFamily: 'inherit' }}>
-          <option value="">All Members</option>{MEMBERS.map(m => <option key={m}>{m}</option>)}
-        </select>
-        <select value={tagF} onChange={e => setTagF(e.target.value)} style={{ background: '#2d2d2d', color: '#ccc', border: '1px solid #3c3c3c', borderRadius: 3, padding: '3px 6px', fontSize: 11, outline: 'none', fontFamily: 'inherit' }}>
-          <option value="">All Tags</option>{TAGS.map(t => <option key={t}>{t}</option>)}
-        </select>
-        <select value={prioF} onChange={e => setPrioF(e.target.value)} style={{ background: '#2d2d2d', color: '#ccc', border: '1px solid #3c3c3c', borderRadius: 3, padding: '3px 6px', fontSize: 11, outline: 'none', fontFamily: 'inherit' }}>
-          <option value="">All Priorities</option>{PRIORITIES.map(p => <option key={p}>{p}</option>)}
-        </select>
-        {hasFilters && <button onClick={() => { setMemberF(''); setTagF(''); setPrioF(''); setSearch(''); }} style={{ background: '#f4474722', color: '#f44747', border: 'none', borderRadius: 3, padding: '3px 10px', fontSize: 10, cursor: 'pointer' }}>Clear All</button>}
+      {showFilters && <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 16, padding: '10px 20px', background: '#1e1e1e', borderBottom: '1px solid #2d2d2d', flexShrink: 0, animation: 'slideIn .15s ease' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 11, color: '#666', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em' }}>Members:</span>
+          <div style={{ display: 'flex', gap: 4 }}>
+            {MEMBERS.map(m => {
+              const sel = memberF.includes(m);
+              return <button key={m} onClick={() => setMemberF(p => sel ? p.filter(x => x !== m) : [...p, m])} style={{ background: sel ? '#007acc22' : '#252526', border: `1px solid ${sel ? '#007acc' : '#3c3c3c'}`, borderRadius: 12, padding: '2px 8px', color: sel ? '#007acc' : '#888', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Av name={m} size={14} /> {m}
+              </button>
+            })}
+          </div>
+        </div>
+
+        <div style={{ width: 1, height: 16, background: '#333' }} />
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 11, color: '#666', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em' }}>Tags:</span>
+          <div style={{ display: 'flex', gap: 4 }}>
+            {TAGS.map(t => {
+              const sel = tagF.includes(t);
+              return <button key={t} onClick={() => setTagF(p => sel ? p.filter(x => x !== t) : [...p, t])} style={{ background: sel ? '#007acc22' : '#252526', border: `1px solid ${sel ? '#007acc' : '#3c3c3c'}`, borderRadius: 4, padding: '2px 8px', color: sel ? '#007acc' : '#888', fontSize: 11, cursor: 'pointer' }}>
+                {t}
+              </button>
+            })}
+          </div>
+        </div>
+
+        <div style={{ width: 1, height: 16, background: '#333' }} />
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 11, color: '#666', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em' }}>Priority:</span>
+          <div style={{ display: 'flex', gap: 4 }}>
+            {PRIORITIES.map(p => {
+              const sel = prioF.includes(p);
+              return <button key={p} onClick={() => setPrioF(prio => sel ? prio.filter(x => x !== p) : [...prio, p])} style={{ background: sel ? '#007acc22' : '#252526', border: `1px solid ${sel ? '#007acc' : '#3c3c3c'}`, borderRadius: 4, padding: '2px 8px', color: sel ? '#007acc' : '#888', fontSize: 11, cursor: 'pointer' }}>
+                {p}
+              </button>
+            })}
+          </div>
+        </div>
+
+        {hasFilters && <button onClick={() => { setMemberF([]); setTagF([]); setPrioF([]); setSearch(''); }} style={{ background: '#f4474722', color: '#f44747', border: 'none', borderRadius: 3, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontWeight: 600, marginLeft: 'auto' }}>Clear All</button>}
       </div>}
 
       {/* BOARD */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        <CardCol title="TO DO" status="todo" tasks={tasks} color="#dcdcaa" collapsed={colC.todo} onToggle={() => setColC(p => ({ ...p, todo: !p.todo }))} onTaskClick={setSel} onUpdate={updateTask} searchFilter={search} memberFilter={memberF} tagFilter={tagF} priorityFilter={prioF} onNewTask={setNewTask} toast={addToast} />
+        <CardCol title="TO DO" status="todo" tasks={tasks} color="#dcdcaa" collapsed={colC.todo} onToggle={() => setColC(p => ({ ...p, todo: !p.todo }))} onTaskClick={setSel} onUpdate={updateTask} onDelete={deleteTask} searchFilter={search} memberFilter={memberF} tagFilter={tagF} priorityFilter={prioF} onNewTask={setNewTask} toast={addToast} />
 
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderRight: '1px solid #2d2d2d', overflow: 'hidden' }}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderRight: '1px solid #2d2d2d', overflow: 'hidden', transition: 'background 0.2s', background: isGanttOver ? '#007acc15' : 'transparent', border: isGanttOver ? '2px dashed #007acc' : '1px solid #2d2d2d', margin: isGanttOver ? '0 2px 2px 2px' : 0, borderRadius: isGanttOver ? 8 : 0 }}
           onDragOver={e => e.preventDefault()}
-          onDrop={e => { e.preventDefault(); const tid = e.dataTransfer.getData('tid'); if (!tid) return; updateTask(tid, { status: 'inprogress', ganttStart: fmt(today), ganttEnd: fmt(addD(today, 5)), completedDate: undefined }); addToast('Moved to In Progress', '#007acc'); }}>
+          onDragEnter={(e) => { e.preventDefault(); ganttDragCounter.current++; setIsGanttOver(true); }}
+          onDragLeave={() => { ganttDragCounter.current--; if (ganttDragCounter.current === 0) setIsGanttOver(false); }}
+          onDrop={e => { e.preventDefault(); setIsGanttOver(false); ganttDragCounter.current = 0; const tid = e.dataTransfer.getData('tid'); if (!tid) return; const endD = fmt(addD(today, 5)); updateTask(tid, { status: 'inprogress', ganttStart: fmt(today), ganttEnd: endD, deadline: endD, completedDate: undefined }); addToast('Moved to In Progress', '#007acc'); }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px', height: 48, background: '#252526', borderBottom: '1px solid #2d2d2d', flexShrink: 0, boxSizing: 'border-box', cursor: 'pointer' }} onClick={() => setColC(p => ({ ...p, ip: !p.ip }))}>
             <I.Chev open={!colC.ip} s={12} />
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#007acc' }} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: '#d4d4d4' }}>IN PROGRESS</span>
-            <span style={{ fontSize: 10, color: '#666' }}>— Gantt View</span>
-            <div style={{ display: 'flex', gap: 4, marginLeft: 8 }}>
-              {MILESTONES.map((ms, i) => <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9, color: ms.color }}><I.Diamond c={ms.color} s={8} />{ms.label}</span>)}
-            </div>
-            <span style={{ fontSize: 11, color: '#888', background: '#2d2d2d', padding: '1px 8px', borderRadius: 8, fontWeight: 600, marginLeft: 'auto' }}>{tasks.filter(t => t.status === 'inprogress').length}</span>
+            <span style={{ fontSize: 14, fontWeight: 600, color: '#d4d4d4' }}>IN PROGRESS</span>
+            <span style={{ fontSize: 12, color: '#666' }}>— Gantt View</span>
+            <span style={{ fontSize: 13, color: '#888', background: '#2d2d2d', padding: '1px 8px', borderRadius: 8, fontWeight: 600, marginLeft: 'auto' }}>{tasks.filter(t => t.status === 'inprogress').length}</span>
             <button onClick={e => { e.stopPropagation(); setNewTask('inprogress'); }} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', padding: 2 }}><I.Plus /></button>
           </div>
           {!colC.ip ? <Gantt tasks={tasks} onTaskClick={setSel} onUpdate={updateTask} searchFilter={search} memberFilter={memberF} tagFilter={tagF} priorityFilter={prioF} zoom={zoom} />
-            : <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#444', fontSize: 12 }}>Gantt collapsed — click header to expand</div>}
+            : <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#444', fontSize: 14 }}>Gantt collapsed — click header to expand</div>}
         </div>
 
-        <CardCol title="COMPLETED" status="completed" tasks={tasks} color="#4ec9b0" collapsed={colC.completed} onToggle={() => setColC(p => ({ ...p, completed: !p.completed }))} onTaskClick={setSel} onUpdate={updateTask} searchFilter={search} memberFilter={memberF} tagFilter={tagF} priorityFilter={prioF} onNewTask={setNewTask} toast={addToast} />
+        <CardCol title="COMPLETED" status="completed" tasks={tasks} color="#4ec9b0" collapsed={colC.completed} onToggle={() => setColC(p => ({ ...p, completed: !p.completed }))} onTaskClick={setSel} onUpdate={updateTask} onDelete={deleteTask} searchFilter={search} memberFilter={memberF} tagFilter={tagF} priorityFilter={prioF} onNewTask={setNewTask} toast={addToast} />
       </div>
 
       {/* STATUS BAR */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0 12px', height: 22, background: '#007acc', flexShrink: 0, fontSize: 10, color: '#fff' }}>
-        <span style={{ fontWeight: 600 }}>Sprint 12</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0 12px', height: 22, background: '#007acc', flexShrink: 0, fontSize: 12, color: '#fff' }}>
         <span>Tasks: {tasks.length}</span>
         <span>Todo: {tasks.filter(t => t.status === 'todo').length}</span>
         <span>Active: {tasks.filter(t => t.status === 'inprogress').length}</span>
         <span>Done: {tasks.filter(t => t.status === 'completed').length}</span>
-        <span style={{ color: '#fff8', fontSize: 9 }}>N: new · /: search · Ctrl+Z/Y: undo/redo · Esc: close</span>
+        <span style={{ color: '#fff8', fontSize: 11 }}>N: new · /: search · Ctrl+Z/Y: undo/redo · Esc: close</span>
         <span style={{ marginLeft: 'auto' }}>{tasks.filter(t => t.status !== 'completed' && t.deadline && parse(t.deadline)! < today).length} overdue</span>
         <span>{fmt(today)}</span>
       </div>

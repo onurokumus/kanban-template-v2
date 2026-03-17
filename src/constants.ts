@@ -1,55 +1,120 @@
-import type { Milestone, Task } from "./types.ts";
+import type { Task } from "./types.ts";
 
-export const MEMBERS = ["Murat", "Onur", "Mustafa", "Enes", "Berk", "İnan", "Fatih", "Muratcan"] as const;
-export const MC: Record<string, string> = { Murat: "#569cd6", Onur: "#4ec9b0", Mustafa: "#ce9178", Enes: "#dcdcaa", Berk: "#c586c0", "İnan": "#9cdcfe", Fatih: "#d7ba7d", Muratcan: "#b5cea8" };
+export const MEMBERS = ["Unassigned", "Murat", "Onur", "Mustafa", "Enes", "Berk", "İnan", "Fatih", "Muratcan"] as const;
+export const MC: Record<string, string> = { 
+  Murat: "#569cd6", 
+  Onur: "#4ec9b0", 
+  Mustafa: "#ce9178", 
+  Enes: "#dcdcaa", 
+  Berk: "#c586c0", 
+  "İnan": "#9cdcfe", 
+  Fatih: "#d7ba7d", 
+  Muratcan: "#b5cea8",
+  Unassigned: "#888888"
+};
 export const PRIORITIES = ["Critical", "High", "Medium", "Low"] as const;
 export const PC: Record<string, string> = { Critical: "#f44747", High: "#ff8c00", Medium: "#dcdcaa", Low: "#608b4e" };
-export const TAGS = ["Frontend", "Backend", "Design", "QA", "DevOps", "Research", "Bug", "Feature"] as const;
-export const TC: Record<string, string> = { Frontend: "#264f78", Backend: "#4d3d1a", Design: "#3d2d4d", QA: "#2d4d3d", DevOps: "#4d2d2d", Research: "#2d3d4d", Bug: "#5c2020", Feature: "#1e4d1e" };
+export const TAGS = ["ATAK", "GOKBEY", "ONTON", "KIHA", "EVTOL", "UCTON", "INFRA"] as const;
+export const TC: Record<string, string> = { 
+  ATAK: "#264f78", 
+  GOKBEY: "#4d3d1a", 
+  ONTON: "#3d2d4d", 
+  KIHA: "#2d4d3d", 
+  EVTOL: "#4d2d2d", 
+  UCTON: "#2d3d4d", 
+  INFRA: "#5c2020" 
+};
 
-export const ROW_H = 42;
-export const today = new Date(2026, 2, 16);
-export const ganttOrigin = new Date(2026, 2, 2);
-export const GANTT_TOTAL_DAYS = 42;
+export const ROW_H = 48;
+export const today = new Date();
+export const addD = (d: Date, n: number): Date => new Date(d.getTime() + n * 864e5);
+export const ganttOrigin = addD(today, -7);
 
 export const fmt = (d: Date | null): string => d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : '';
 export const parse = (s: string | undefined | null): Date | null => { if (!s) return null; const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
-export const diffD = (a: Date, b: Date): number => Math.round((b.getTime() - a.getTime()) / 864e5);
-export const addD = (d: Date, n: number): Date => new Date(d.getTime() + n * 864e5);
+export const diffD = (a: Date | string, b: Date | string): number => {
+  const da = typeof a === 'string' ? parse(a) : a;
+  const db = typeof b === 'string' ? parse(b) : b;
+  if (!da || !db) return 0;
+  return Math.round((db.getTime() - da.getTime()) / 864e5);
+};
 
 let _id = 200;
 export const uid = (): string => `t${_id++}`;
 export const sid = (): string => `s${_id++}`;
 export const coid = (): string => `c${_id++}`;
 
-export const MILESTONES: Milestone[] = [
-  { date: "2026-03-20", label: "Sprint 12 End", color: "#dcdcaa" },
-  { date: "2026-03-27", label: "Beta Release", color: "#c586c0" },
-  { date: "2026-04-03", label: "v2.3 Launch", color: "#4ec9b0" },
-];
 
 export const initTasks = (): Task[] => [
-  { id: uid(), title: "API Authentication Module", desc: "Implement OAuth2 flow with refresh tokens and session management.", assignee: "Onur", priority: "High", tags: ["Backend", "Feature"], status: "todo", estHours: 16, deadline: "2026-03-25", comments: [{ id: coid(), author: "Murat", text: "Should we use Keycloak or custom?", ts: "2026-03-14T09:00" }], created: "2026-03-10", subtasks: [{ id: sid(), title: "Design auth flow", done: true }, { id: sid(), title: "Implement token refresh", done: false }, { id: sid(), title: "Write integration tests", done: false }], dependencies: [], progress: 33 },
-  { id: uid(), title: "Dashboard Wireframes", desc: "Create high-fidelity wireframes for analytics dashboard.", assignee: "Mustafa", priority: "Medium", tags: ["Design"], status: "todo", estHours: 8, deadline: "2026-03-22", comments: [], created: "2026-03-11", subtasks: [{ id: sid(), title: "Research competitors", done: true }, { id: sid(), title: "Low-fi sketches", done: true }, { id: sid(), title: "High-fi in Figma", done: false }], dependencies: [], progress: 66 },
-  { id: uid(), title: "CI/CD Pipeline Fix", desc: "Debug and fix the failing deployment pipeline on staging.", assignee: "Berk", priority: "Critical", tags: ["DevOps", "Bug"], status: "todo", estHours: 6, deadline: "2026-03-18", comments: [{ id: coid(), author: "Berk", text: "Looks like a Docker layer cache issue.", ts: "2026-03-15T14:30" }], created: "2026-03-13", subtasks: [], dependencies: [], progress: 0 },
-  { id: uid(), title: "User Profile Page", desc: "Build user profile settings page with avatar upload.", assignee: "Enes", priority: "Medium", tags: ["Frontend", "Feature"], status: "todo", estHours: 12, deadline: "2026-03-28", comments: [], created: "2026-03-12", subtasks: [{ id: sid(), title: "Profile form UI", done: false }, { id: sid(), title: "Avatar crop/upload", done: false }, { id: sid(), title: "API integration", done: false }], dependencies: [], progress: 0 },
-  { id: uid(), title: "Database Migration Script", desc: "Write migration for new schema changes in v2.3.", assignee: "İnan", priority: "High", tags: ["Backend"], status: "inprogress", estHours: 10, deadline: "2026-03-24", ganttStart: "2026-03-10", ganttEnd: "2026-03-20", comments: [{ id: coid(), author: "İnan", text: "Need to handle legacy user_roles table carefully.", ts: "2026-03-13T11:00" }], created: "2026-03-09", subtasks: [{ id: sid(), title: "Schema design", done: true }, { id: sid(), title: "Migration script", done: true }, { id: sid(), title: "Rollback procedure", done: false }, { id: sid(), title: "Data validation", done: false }], dependencies: [], progress: 50 },
-  { id: uid(), title: "Search Functionality", desc: "Implement full-text search with Elasticsearch integration.", assignee: "Onur", priority: "High", tags: ["Backend", "Feature"], status: "inprogress", estHours: 20, deadline: "2026-03-30", ganttStart: "2026-03-12", ganttEnd: "2026-03-26", comments: [], created: "2026-03-08", subtasks: [{ id: sid(), title: "ES cluster setup", done: true }, { id: sid(), title: "Indexing pipeline", done: true }, { id: sid(), title: "Search API", done: false }, { id: sid(), title: "Autocomplete", done: false }, { id: sid(), title: "Relevance tuning", done: false }], dependencies: [], progress: 40 },
-  { id: uid(), title: "Component Library Update", desc: "Update shared component library to latest design system tokens.", assignee: "Fatih", priority: "Medium", tags: ["Frontend", "Design"], status: "inprogress", estHours: 14, deadline: "2026-03-27", ganttStart: "2026-03-09", ganttEnd: "2026-03-22", comments: [], created: "2026-03-07", subtasks: [{ id: sid(), title: "Audit current components", done: true }, { id: sid(), title: "Update tokens", done: true }, { id: sid(), title: "Visual regression tests", done: false }], dependencies: [], progress: 66 },
-  { id: uid(), title: "Load Testing Suite", desc: "Set up k6 load testing for critical API endpoints.", assignee: "Muratcan", priority: "Medium", tags: ["QA", "DevOps"], status: "inprogress", estHours: 12, deadline: "2026-03-26", ganttStart: "2026-03-11", ganttEnd: "2026-03-23", comments: [{ id: coid(), author: "Muratcan", text: "Using k6 cloud for distributed tests.", ts: "2026-03-14T16:00" }], created: "2026-03-10", subtasks: [{ id: sid(), title: "Identify endpoints", done: true }, { id: sid(), title: "Write test scripts", done: false }, { id: sid(), title: "CI integration", done: false }], dependencies: [], progress: 33 },
-  { id: uid(), title: "Performance Audit", desc: "Run Lighthouse audits and fix critical performance issues.", assignee: "Murat", priority: "High", tags: ["Frontend", "QA"], status: "inprogress", estHours: 8, deadline: "2026-03-22", ganttStart: "2026-03-13", ganttEnd: "2026-03-21", comments: [], created: "2026-03-11", subtasks: [{ id: sid(), title: "Run audits", done: true }, { id: sid(), title: "Fix CLS issues", done: true }, { id: sid(), title: "Optimize images", done: false }], dependencies: [], progress: 66 },
-  { id: uid(), title: "WebSocket vs SSE Research", desc: "Evaluate real-time communication strategies for notifications.", assignee: "Enes", priority: "Low", tags: ["Research"], status: "inprogress", estHours: 6, deadline: "2026-03-20", ganttStart: "2026-03-14", ganttEnd: "2026-03-19", comments: [], created: "2026-03-12", subtasks: [{ id: sid(), title: "Research document", done: false }, { id: sid(), title: "Proof of concept", done: false }], dependencies: [], progress: 20 },
-  { id: uid(), title: "Email Template System", desc: "Built responsive email templates with MJML.", assignee: "Mustafa", priority: "Medium", tags: ["Frontend", "Feature"], status: "completed", estHours: 10, deadline: "2026-03-15", completedDate: "2026-03-14", comments: [{ id: coid(), author: "Mustafa", text: "All templates tested across major email clients.", ts: "2026-03-14T18:00" }], created: "2026-03-05", subtasks: [{ id: sid(), title: "Design templates", done: true }, { id: sid(), title: "MJML implementation", done: true }, { id: sid(), title: "Cross-client testing", done: true }], dependencies: [], progress: 100 },
-  { id: uid(), title: "API Rate Limiting", desc: "Implement token bucket rate limiting on public endpoints.", assignee: "İnan", priority: "High", tags: ["Backend", "Feature"], status: "completed", estHours: 8, deadline: "2026-03-16", completedDate: "2026-03-15", comments: [], created: "2026-03-06", subtasks: [{ id: sid(), title: "Algorithm impl", done: true }, { id: sid(), title: "Redis integration", done: true }], dependencies: [], progress: 100 },
-  { id: uid(), title: "Unit Test Coverage", desc: "Increase test coverage to 80% for core modules.", assignee: "Berk", priority: "Medium", tags: ["QA"], status: "completed", estHours: 14, deadline: "2026-03-14", completedDate: "2026-03-13", comments: [], created: "2026-03-03", subtasks: [], dependencies: [], progress: 100 },
-  { id: uid(), title: "Logging Infrastructure", desc: "Set up structured logging with ELK stack.", assignee: "Muratcan", priority: "High", tags: ["DevOps"], status: "completed", estHours: 12, deadline: "2026-03-12", completedDate: "2026-03-11", comments: [], created: "2026-03-01", subtasks: [], dependencies: [], progress: 100 },
-  { id: uid(), title: "Notification Service", desc: "Implement push notification service with Firebase.", assignee: "Murat", priority: "Medium", tags: ["Backend", "Feature"], status: "inprogress", estHours: 15, deadline: "2026-03-28", ganttStart: "2026-03-08", ganttEnd: "2026-03-24", comments: [], created: "2026-03-06", subtasks: [{ id: sid(), title: "Firebase setup", done: true }, { id: sid(), title: "Backend integration", done: true }, { id: sid(), title: "Client SDK", done: false }, { id: sid(), title: "Testing", done: false }], dependencies: [], progress: 50 },
-  { id: uid(), title: "Dark Mode Toggle", desc: "Add dark/light theme switching across the app.", assignee: "Fatih", priority: "Low", tags: ["Frontend", "Design"], status: "completed", estHours: 6, deadline: "2026-03-13", completedDate: "2026-03-12", comments: [], created: "2026-03-04", subtasks: [], dependencies: [], progress: 100 },
-  { id: uid(), title: "Data Export Feature", desc: "Allow users to export reports as CSV and PDF.", assignee: "Murat", priority: "Medium", tags: ["Backend", "Feature"], status: "todo", estHours: 10, deadline: "2026-03-30", comments: [], created: "2026-03-14", subtasks: [{ id: sid(), title: "CSV export", done: false }, { id: sid(), title: "PDF generation", done: false }], dependencies: [], progress: 0 },
-  { id: uid(), title: "Mobile Responsive Fixes", desc: "Fix layout issues on mobile viewports for key pages.", assignee: "Fatih", priority: "High", tags: ["Frontend", "Bug"], status: "todo", estHours: 8, deadline: "2026-03-23", comments: [], created: "2026-03-15", subtasks: [], dependencies: [], progress: 0 },
-  { id: uid(), title: "Redis Cache Layer", desc: "Add Redis caching for frequently accessed queries.", assignee: "İnan", priority: "High", tags: ["Backend"], status: "todo", estHours: 12, deadline: "2026-03-26", comments: [], created: "2026-03-14", subtasks: [{ id: sid(), title: "Cache strategy doc", done: false }, { id: sid(), title: "Implementation", done: false }, { id: sid(), title: "Cache invalidation", done: false }], dependencies: [], progress: 0 },
-  { id: uid(), title: "Accessibility Audit", desc: "WCAG 2.1 AA compliance check and fixes.", assignee: "Enes", priority: "Medium", tags: ["QA", "Frontend"], status: "completed", estHours: 10, deadline: "2026-03-15", completedDate: "2026-03-14", comments: [], created: "2026-03-05", subtasks: [], dependencies: [], progress: 100 },
-  { id: uid(), title: "Berk Sprint Review", desc: "Prepare and present sprint review deck.", assignee: "Berk", priority: "Low", tags: ["Research"], status: "inprogress", estHours: 4, deadline: "2026-03-20", ganttStart: "2026-03-16", ganttEnd: "2026-03-20", comments: [], created: "2026-03-15", subtasks: [{ id: sid(), title: "Gather metrics", done: false }, { id: sid(), title: "Create slides", done: false }], dependencies: [], progress: 0 },
-  { id: uid(), title: "İnan API Documentation", desc: "Write OpenAPI specs for all v2.3 endpoints.", assignee: "İnan", priority: "Medium", tags: ["Backend"], status: "inprogress", estHours: 8, deadline: "2026-03-25", ganttStart: "2026-03-15", ganttEnd: "2026-03-24", comments: [], created: "2026-03-14", subtasks: [{ id: sid(), title: "Auth endpoints", done: true }, { id: sid(), title: "CRUD endpoints", done: false }, { id: sid(), title: "Search endpoints", done: false }], dependencies: [], progress: 33 },
-  { id: uid(), title: "Mustafa Icon Set", desc: "Design custom icon set for the application.", assignee: "Mustafa", priority: "Low", tags: ["Design"], status: "inprogress", estHours: 10, deadline: "2026-03-28", ganttStart: "2026-03-12", ganttEnd: "2026-03-25", comments: [], created: "2026-03-10", subtasks: [{ id: sid(), title: "Icon inventory", done: true }, { id: sid(), title: "Design system icons", done: false }, { id: sid(), title: "Export SVGs", done: false }], dependencies: [], progress: 33 },
+  // --- IN PROGRESS ---
+  { 
+    id: uid(), title: "Rotor Blade Airloads Analysis", desc: "Evaluate pressure distribution across main rotor blades during high-speed hover.", 
+    assignee: "Murat", priority: "High", tags: ["ATAK", "UCTON"], status: "inprogress", estHours: 16, deadline: "2026-03-22", ganttStart: "2026-03-14", ganttEnd: "2026-03-22", 
+    comments: [{ id: coid(), author: "Onur", text: "Are we using CFD or simplified BEMT?", ts: "2026-03-14T09:00" }], 
+    created: "2026-03-10", 
+    subtasks: [
+      { id: sid(), title: "Mesh generation", done: true, ganttStart: "2026-03-14", deadline: "2026-03-16" }, 
+      { id: sid(), title: "Solver setup", done: false, ganttStart: "2026-03-17", deadline: "2026-03-19" }, 
+      { id: sid(), title: "Data extraction", done: false, ganttStart: "2026-03-20", deadline: "2026-03-22" }
+    ], 
+    dependencies: [], progress: 33 
+  },
+  { 
+    id: uid(), title: "Vibration Suppression System", desc: "Optimize active vibration control parameters for GOKBEY airframe.", 
+    assignee: "Onur", priority: "Medium", tags: ["GOKBEY"], status: "inprogress", estHours: 8, deadline: "2026-03-20", ganttStart: "2026-03-12", ganttEnd: "2026-03-20", 
+    comments: [], created: "2026-03-11", 
+    subtasks: [
+      { id: sid(), title: "Sensor placement", done: true, ganttStart: "2026-03-12", deadline: "2026-03-14" }, 
+      { id: sid(), title: "Actuator tuning", done: true, ganttStart: "2026-03-15", deadline: "2026-03-17" }, 
+      { id: sid(), title: "Software validation", done: false, ganttStart: "2026-03-18", deadline: "2026-03-20" }
+    ], 
+    dependencies: [], progress: 66 
+  },
+  { id: uid(), title: "Flight Control Law Update", desc: "Implement new control laws for transition flight in EVTOL prototype.", assignee: "Mustafa", priority: "Critical", tags: ["EVTOL"], status: "inprogress", estHours: 6, deadline: "2026-03-20", ganttStart: "2026-03-14", ganttEnd: "2026-03-20", comments: [], created: "2026-03-13", subtasks: [], dependencies: [], progress: 20 },
+  { id: uid(), title: "Stability Derivative Extraction", desc: "Extract lateral stability derivatives from wind tunnel data.", assignee: "Enes", priority: "Medium", tags: ["KIHA"], status: "inprogress", estHours: 12, deadline: "2026-03-25", ganttStart: "2026-03-15", ganttEnd: "2026-03-25", comments: [], created: "2026-03-12", subtasks: [], dependencies: [], progress: 30 },
+  { id: uid(), title: "Structural Load Testing", desc: "Conduct static load tests on ONTON landing gear assembly.", assignee: "Berk", priority: "High", tags: ["ONTON"], status: "inprogress", estHours: 10, deadline: "2026-03-20", ganttStart: "2026-03-10", ganttEnd: "2026-03-20", comments: [], created: "2026-03-09", subtasks: [], dependencies: [], progress: 50 },
+  { id: uid(), title: "Aeroacoustic Noise Mapping", desc: "Map acoustic signature of rotor hub during hover maneuvers.", assignee: "İnan", priority: "High", tags: ["INFRA", "UCTON"], status: "inprogress", estHours: 20, deadline: "2026-03-26", ganttStart: "2026-03-12", ganttEnd: "2026-03-26", comments: [], created: "2026-03-08", subtasks: [], dependencies: [], progress: 40 },
+  { id: uid(), title: "Tail Rotor Fatigue Suite", desc: "Bench testing tail rotor assembly for long-term fatigue lifecycle.", assignee: "Fatih", priority: "Medium", tags: ["GOKBEY"], status: "inprogress", estHours: 40, deadline: "2026-04-05", ganttStart: "2026-03-14", ganttEnd: "2026-04-05", comments: [], created: "2026-03-12", subtasks: [], dependencies: [], progress: 15 },
+  { id: uid(), title: "BMS Thermals Check", desc: "Monitor battery management system thermal behavior in EVTOL high-load cycles.", assignee: "Muratcan", priority: "High", tags: ["EVTOL"], status: "inprogress", estHours: 24, deadline: "2026-03-28", ganttStart: "2026-03-15", ganttEnd: "2026-03-28", comments: [], created: "2026-03-15", subtasks: [], dependencies: [], progress: 10 },
+  { id: uid(), title: "Landing Gear Shock Absorption", desc: "Testing shock absorber performance for KIHA emergency landings.", assignee: "Enes", priority: "Low", tags: ["KIHA", "INFRA"], status: "inprogress", estHours: 14, deadline: "2026-03-24", ganttStart: "2026-03-16", ganttEnd: "2026-03-24", comments: [], created: "2026-03-14", subtasks: [], dependencies: [], progress: 5 },
+  { id: uid(), title: "Ground Resonance Analysis", desc: "Stability check for ground resonance under various lead-lag damper states.", assignee: "Murat", priority: "Critical", tags: ["GOKBEY", "UCTON"], status: "inprogress", estHours: 18, deadline: "2026-03-21", ganttStart: "2026-03-15", ganttEnd: "2026-03-21", comments: [], created: "2026-03-14", subtasks: [], dependencies: [], progress: 25 },
+  { id: uid(), title: "Flight Test Instrumentation Setup", desc: "Calibrating strain gauges and thermocouples for upcoming flight test campaign.", assignee: "Mustafa", priority: "High", tags: ["ATAK", "ONTON"], status: "inprogress", estHours: 12, deadline: "2026-03-20", ganttStart: "2026-03-16", ganttEnd: "2026-03-20", comments: [], created: "2026-03-15", subtasks: [], dependencies: [], progress: 5 },
+  { id: uid(), title: "Propulsion Torque Validation", desc: "Verifying e-motor torque limits against structural margins in hover.", assignee: "Berk", priority: "Medium", tags: ["EVTOL"], status: "inprogress", estHours: 14, deadline: "2026-03-26", ganttStart: "2026-03-16", ganttEnd: "2026-03-26", comments: [], created: "2026-03-15", subtasks: [], dependencies: [], progress: 10 },
+  { id: uid(), title: "Hub Drag Breakdown", desc: "Component-level drag analysis for the main rotor hub assembly.", assignee: "İnan", priority: "Medium", tags: ["UCTON", "GOKBEY"], status: "inprogress", estHours: 20, deadline: "2026-03-29", ganttStart: "2026-03-16", ganttEnd: "2026-03-29", comments: [], created: "2026-03-14", subtasks: [], dependencies: [], progress: 5 },
+  { id: uid(), title: "Blade Tip Vortex Interaction", desc: "High-fidelity simulation of BVI noise during descent profiles.", assignee: "Muratcan", priority: "Medium", tags: ["INFRA"], status: "inprogress", estHours: 24, deadline: "2026-03-25", ganttStart: "2026-03-16", ganttEnd: "2026-03-25", comments: [], created: "2026-03-15", subtasks: [], dependencies: [], progress: 10 },
+
+  // --- COMPLETED ---
+  { 
+    id: uid(), title: "Fuselage Drag Reduction", desc: "Optimizing the rear fuselage fairing for ATAK to reduce interference drag.", 
+    assignee: "Onur", priority: "Medium", tags: ["ATAK"], status: "completed", estHours: 35, deadline: "2026-03-15", completedDate: "2026-03-14", 
+    comments: [], created: "2026-03-01", 
+    subtasks: [
+      { id: sid(), title: "Baseline CFD", done: true }, 
+      { id: sid(), title: "Fairing geometry tweak", done: true }, 
+      { id: sid(), title: "Final report", done: true }
+    ], 
+    dependencies: [], progress: 100 
+  },
+  { id: uid(), title: "Main Hub Casting Inspection", desc: "Non-destructive testing and X-ray inspection of the primary rotor hub casting.", assignee: "Berk", priority: "Critical", tags: ["GOKBEY", "INFRA"], status: "completed", estHours: 20, deadline: "2026-03-10", completedDate: "2026-03-08", comments: [], created: "2026-02-25", subtasks: [], dependencies: [], progress: 100 },
+  { id: uid(), title: "Avionics Thermal Analysis", desc: "Thermal simulation of the cockpit avionics rack under extreme ambient conditions.", assignee: "İnan", priority: "Medium", tags: ["ONTON"], status: "completed", estHours: 15, deadline: "2026-03-12", completedDate: "2026-03-11", comments: [], created: "2026-03-01", subtasks: [], dependencies: [], progress: 100 },
+  { id: uid(), title: "KIHA Rotor Head Assembly", desc: "Final assembly and torque check of the KIHA unmanned rotor system.", assignee: "Enes", priority: "High", tags: ["KIHA"], status: "completed", estHours: 18, deadline: "2026-03-14", completedDate: "2026-03-13", comments: [], created: "2026-03-05", subtasks: [], dependencies: [], progress: 100 },
+  { id: uid(), title: "Pilot Seat Crashworthiness", desc: "Dynamic impact simulation for the new pilot seat design.", assignee: "Fatih", priority: "Critical", tags: ["ATAK"], status: "completed", estHours: 25, deadline: "2026-03-05", completedDate: "2026-03-04", comments: [], created: "2026-02-20", subtasks: [], dependencies: [], progress: 100 },
+  { id: uid(), title: "EVTOL Battery Drop Test", desc: "Safety validation for the battery module under high-G impact conditions.", assignee: "Muratcan", priority: "Critical", tags: ["EVTOL"], status: "completed", estHours: 12, deadline: "2026-03-01", completedDate: "2026-02-28", comments: [], created: "2026-02-15", subtasks: [], dependencies: [], progress: 100 },
+
+  // --- TO DO ---
+  { 
+    id: uid(), title: "Pitch Link Clearance Check", desc: "Verifying bearing clearances in the main rotor pitch control links.", 
+    assignee: "Mustafa", priority: "Medium", tags: ["GOKBEY"], status: "todo", estHours: 8, deadline: "2026-03-28", 
+    comments: [], created: "2026-03-14", 
+    subtasks: [
+      { id: sid(), title: "Disassemble linkage", done: false }, 
+      { id: sid(), title: "Measure tolerances", done: false }
+    ], 
+    dependencies: [], progress: 0 
+  },
+  { id: uid(), title: "ATAK Pylon Aero Fairing", desc: "Design review of the aerodynamic fairing for the wing-mounted weapon pylons.", assignee: "Onur", priority: "Low", tags: ["ATAK"], status: "todo", estHours: 12, deadline: "2026-04-05", comments: [], created: "2026-03-15", subtasks: [], dependencies: [], progress: 0 },
+  { id: uid(), title: "Transmission Oil Cooling", desc: "Efficiency test for the main gearbox oil cooling system in hot-day scenarios.", assignee: "Unassigned", priority: "High", tags: ["ONTON"], status: "todo", estHours: 20, deadline: "2026-04-10", comments: [], created: "2026-03-15", subtasks: [], dependencies: [], progress: 0 },
+  { id: uid(), title: "EM Radiated Emissions", desc: "Spectrum analysis for electromagnetically radiating components in the fuselage.", assignee: "Unassigned", priority: "Medium", tags: ["INFRA"], status: "todo", estHours: 16, deadline: "2026-04-12", comments: [], created: "2026-03-16", subtasks: [], dependencies: [], progress: 0 },
+  { id: uid(), title: "Pilot Flight Manual Update", desc: "Updating the handling qualities section of the preliminary flight manual.", assignee: "Fatih", priority: "Low", tags: ["ATAK", "GOKBEY"], status: "todo", estHours: 10, deadline: "2026-04-15", comments: [], created: "2026-03-16", subtasks: [], dependencies: [], progress: 0 },
+  { id: uid(), title: "Swashplate Load Survey", desc: "Measuring control rod loads during lateral cyclic maneuvers.", assignee: "Unassigned", priority: "Low", tags: ["KIHA"], status: "todo", estHours: 12, deadline: "2026-04-02", comments: [], created: "2026-03-16", subtasks: [], dependencies: [], progress: 0 },
 ];

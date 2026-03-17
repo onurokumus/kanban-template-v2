@@ -25,7 +25,7 @@ export const exportPDF = (tasks: Task[]) => {
     .critical{color:#f44747}.high{color:#ff8c00}.medium{color:#dcdcaa}.low{color:#608b4e}
     @media print{body{background:#fff;color:#000}th{background:#eee;color:#333}td{border-color:#ddd}}
   </style></head><body>
-    <h1>Project Board — Sprint 12</h1>
+    <h1 style="display:flex;align-items:center;gap:10px">Kezban <span style="color:#666;font-size:0.4em;vertical-align:middle;margin-top:2px">●</span> <span style="font-size:0.8em;color:#888;font-weight:400;margin-top:4px">K11C0</span></h1>
     <p>Exported: ${today.toLocaleDateString()}</p>
     ${['todo', 'inprogress', 'completed'].map(s => {
     const st = byStatus(s);

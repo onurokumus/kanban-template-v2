@@ -2,6 +2,8 @@ export interface Subtask {
   id: string;
   title: string;
   done: boolean;
+  ganttStart?: string;
+  deadline?: string;
 }
 
 export interface Comment {

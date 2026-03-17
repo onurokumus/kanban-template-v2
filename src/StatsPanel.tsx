@@ -13,6 +13,8 @@ type ViewKey = "overview" | "burndown" | "heatmap" | "tags";
 
 export const StatsPanel = ({ tasks, onClose }: Props) => {
   const [view, setView] = useState<ViewKey>('overview');
+  const [selectedMember, setSelectedMember] = useState<string | 'all'>('all');
+  const [hoveredCell, setHoveredCell] = useState<{ member: string; index: number; x: number; y: number } | null>(null);
 
   const memberStats = useMemo<MemberStat[]>(() => MEMBERS.map(m => {
     const mine = tasks.filter(t => t.assignee === m);
@@ -27,25 +29,39 @@ export const StatsPanel = ({ tasks, onClose }: Props) => {
   }), [tasks]);
 
   const burndown = useMemo(() => {
+    const relevantTasks = selectedMember === 'all' ? tasks : tasks.filter(t => t.assignee === selectedMember);
     const days: { date: string; remaining: number; ideal: number }[] = [];
-    for (let i = -14; i <= 14; i++) {
+    const totalEst = relevantTasks.length;
+
+    // 30 day range: -15 to +15
+    for (let i = -15; i <= 15; i++) {
       const d = addD(today, i);
-      const total = tasks.filter(t => parse(t.created)! <= d).length;
-      const completed = tasks.filter(t => t.status === 'completed' && t.completedDate && parse(t.completedDate)! <= d).length;
-      const remaining = total - completed;
-      days.push({ date: fmt(d).slice(5), remaining, ideal: Math.max(0, Math.round(tasks.length * (1 - (i + 14) / 28))) });
+      const totalInRange = relevantTasks.filter(t => parse(t.created)! <= d).length;
+      const completedInRange = relevantTasks.filter(t => t.status === 'completed' && t.completedDate && parse(t.completedDate)! <= d).length;
+      const remaining = totalInRange - completedInRange;
+
+      const ideal = Math.max(0, Math.round(totalEst * (1 - (i + 15) / 30)));
+      days.push({ date: fmt(d).slice(5), remaining, ideal });
     }
     return days;
-  }, [tasks]);
+  }, [tasks, selectedMember]);
 
   const heatmap = useMemo(() => {
-    const data: Record<string, string | number>[] = [];
-    for (let i = 0; i < 21; i++) {
-      const d = addD(ganttOrigin, i + 7);
+    const data: Record<string, any>[] = [];
+    for (let i = 0; i < 30; i++) {
+      const d = addD(ganttOrigin, i);
       const ds = fmt(d);
-      const row: Record<string, string | number> = { date: ds.slice(5) };
+      const row: Record<string, any> = { date: ds.slice(5), fullDate: ds };
       MEMBERS.forEach(m => {
-        row[m] = tasks.filter(t => t.status === 'inprogress' && t.ganttStart && t.ganttEnd && parse(t.ganttStart)! <= d && parse(t.ganttEnd)! >= d && t.assignee === m).length;
+        const activeTasks = tasks.filter(t => t.status === 'inprogress' && t.ganttStart && t.ganttEnd && parse(t.ganttStart)! <= d && parse(t.ganttEnd)! >= d && t.assignee === m);
+        row[m] = activeTasks.length;
+        row[m + '_tasks'] = activeTasks.map(t => {
+          const start = parse(t.ganttStart!)!;
+          const end = parse(t.ganttEnd!)!;
+          const duration = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+          return { title: t.title, dailyHrs: (t.estHours || 0) / duration };
+        });
+        row[m + '_hrs'] = row[m + '_tasks'].reduce((s: number, t: any) => s + t.dailyHrs, 0);
       });
       data.push(row);
     }
@@ -62,127 +78,223 @@ export const StatsPanel = ({ tasks, onClose }: Props) => {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(3px)' }}>
-      <div style={{ background: '#1e1e1e', border: '1px solid #3c3c3c', borderRadius: 8, width: 900, maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,.5)' }}>
-        <div style={{ padding: '14px 20px', borderBottom: '1px solid #2d2d2d', display: 'flex', alignItems: 'center', gap: 12, position: 'sticky', top: 0, background: '#1e1e1e', zIndex: 1 }}>
+      <div style={{ background: '#1e1e1e', border: '1px solid #3c3c3c', borderRadius: 8, width: 950, maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,.5)' }}>
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid #2d2d2d', display: 'flex', alignItems: 'center', gap: 12, background: '#1e1e1e', zIndex: 1 }}>
           <I.Chart />
-          <span style={{ color: '#d4d4d4', fontSize: 14, fontWeight: 600, flex: 1 }}>Team Statistics & Analytics</span>
-          <div style={{ display: 'flex', gap: 2 }}>
+          <span style={{ color: '#d4d4d4', fontSize: 16, fontWeight: 600, flex: 1 }}>Kezban Analytics</span>
+          <div style={{ display: 'flex', background: '#252526', padding: 2, borderRadius: 6, border: '1px solid #3c3c3c' }}>
             {(["overview", "burndown", "heatmap", "tags"] as ViewKey[]).map(v => (
-              <button key={v} onClick={() => setView(v)} style={{ padding: '4px 12px', borderRadius: 3, border: 'none', background: view === v ? '#007acc' : '#2d2d2d', color: view === v ? '#fff' : '#999', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', textTransform: 'capitalize' }}>{v}</button>
+              <button key={v} onClick={() => setView(v)} style={{ padding: '5px 14px', borderRadius: 4, border: 'none', background: view === v ? '#007acc' : 'transparent', color: view === v ? '#fff' : '#888', fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', textTransform: 'capitalize', transition: 'all .2s' }}>{v}</button>
             ))}
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', marginLeft: 8 }}><I.X /></button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', marginLeft: 8, padding: 4 }}><I.X /></button>
         </div>
 
-        <div style={{ padding: '16px 20px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 16 }}>
-            {[{ l: 'Total', v: tasks.length, c: '#569cd6' }, { l: 'To Do', v: tasks.filter(t => t.status === 'todo').length, c: '#dcdcaa' }, { l: 'In Progress', v: tasks.filter(t => t.status === 'inprogress').length, c: '#007acc' }, { l: 'Completed', v: tasks.filter(t => t.status === 'completed').length, c: '#4ec9b0' }].map(s => (
-              <div key={s.l} style={{ background: '#252526', borderRadius: 6, padding: '12px 14px', border: '1px solid #2d2d2d' }}>
-                <div style={{ color: '#888', fontSize: 9, textTransform: 'uppercase', letterSpacing: '.08em' }}>{s.l}</div>
-                <div style={{ color: s.c, fontSize: 24, fontWeight: 700, marginTop: 2 }}>{s.v}</div>
+        <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
+            {[{ l: 'Total Tasks', v: tasks.length, c: '#569cd6', sub: 'Project Scope' },
+            { l: 'Pending', v: tasks.filter(t => t.status !== 'completed').length, c: '#dcdcaa', sub: 'Remaining' },
+            { l: 'Active', v: tasks.filter(t => t.status === 'inprogress').length, c: '#007acc', sub: 'Current Work' },
+            { l: 'Done', v: tasks.filter(t => t.status === 'completed').length, c: '#4ec9b0', sub: 'Finished' }].map(s => (
+              <div key={s.l} style={{ background: '#252526', borderRadius: 8, padding: '14px', border: '1px solid #3c3c3c', position: 'relative', overflow: 'hidden' }}>
+                <div style={{ position: 'absolute', top: 0, left: 0, width: 3, height: '100%', background: s.c }} />
+                <div style={{ color: '#888', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.08em', fontWeight: 600 }}>{s.l}</div>
+                <div style={{ color: s.c, fontSize: 28, fontWeight: 700, marginTop: 4 }}>{s.v}</div>
+                <div style={{ color: '#555', fontSize: 11, marginTop: 2 }}>{s.sub}</div>
               </div>
             ))}
           </div>
 
-          {view === 'overview' && <div>
+          {view === 'overview' && <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {memberStats.map(s => (
-              <div key={s.name} style={{ background: '#252526', borderRadius: 6, padding: '12px 14px', marginBottom: 6, border: '1px solid #2d2d2d' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                  <Av name={s.name} size={30} />
+              <div key={s.name} style={{ background: '#252526', borderRadius: 8, padding: '16px', border: '1px solid #2d2d2d', transition: 'border-color .2s' }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = '#007acc55'}
+                onMouseLeave={e => e.currentTarget.style.borderColor = '#2d2d2d'}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 12 }}>
+                  <Av name={s.name} size={40} />
                   <div style={{ flex: 1 }}>
-                    <div style={{ color: '#d4d4d4', fontSize: 12, fontWeight: 600 }}>{s.name}</div>
-                    <div style={{ color: '#666', fontSize: 10 }}>{s.total} tasks · {s.totalH}h est · {s.doneH}h done</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ color: '#d4d4d4', fontSize: 15, fontWeight: 600 }}>{s.name}</span>
+                      <span style={{ fontSize: 11, color: '#666', background: '#1e1e1e', padding: '2px 6px', borderRadius: 10 }}>{s.total} Tasks</span>
+                    </div>
+                    <div style={{ color: '#888', fontSize: 12, marginTop: 2 }}>{s.totalH}h Estimated · {s.doneH}h Completed ({Math.round(s.doneH / s.totalH * 100 || 0)}%)</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ color: s.vel >= 60 ? '#4ec9b0' : s.vel >= 30 ? '#dcdcaa' : '#f44747', fontSize: 18, fontWeight: 700 }}>{s.vel}%</div>
-                    <div style={{ color: '#666', fontSize: 9, textTransform: 'uppercase' }}>Velocity</div>
+                    <div style={{ color: s.vel >= 60 ? '#4ec9b0' : s.vel >= 30 ? '#dcdcaa' : '#f44747', fontSize: 22, fontWeight: 800 }}>{s.vel}%</div>
+                    <div style={{ color: '#555', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.1em' }}>Efficiency</div>
                   </div>
-                  {s.overdue > 0 && <div style={{ background: '#f4474718', color: '#f44747', fontSize: 10, padding: '3px 8px', borderRadius: 3, fontWeight: 600 }}>{s.overdue} overdue</div>}
+                  {s.overdue > 0 && <div style={{ background: '#f4474718', color: '#f44747', fontSize: 12, padding: '4px 10px', borderRadius: 4, transform: 'rotate(2deg)', border: '1px solid #f4474744', fontWeight: 600 }}>{s.overdue} Overdue</div>}
                 </div>
-                <div style={{ display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden', background: '#1e1e1e', gap: 1 }}>
-                  {s.done > 0 && <div style={{ flex: s.done, background: '#4ec9b0', borderTopLeftRadius: 3, borderBottomLeftRadius: 3 }} />}
-                  {s.ip > 0 && <div style={{ flex: s.ip, background: '#007acc' }} />}
-                  {s.todo > 0 && <div style={{ flex: s.todo, background: '#dcdcaa44', borderTopRightRadius: 3, borderBottomRightRadius: 3 }} />}
+                <div style={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', background: '#111', padding: 1 }}>
+                  {s.done > 0 && <div style={{ flex: s.done, background: '#4ec9b0', transition: 'all .5s' }} title="Done" />}
+                  {s.ip > 0 && <div style={{ flex: s.ip, background: '#007acc', transition: 'all .5s' }} title="In Progress" />}
+                  {s.todo > 0 && <div style={{ flex: s.todo, background: '#dcdcaa22', transition: 'all .5s' }} title="To Do" />}
                 </div>
-                <div style={{ display: 'flex', gap: 14, marginTop: 6, fontSize: 10, color: '#888' }}>
-                  <span><span style={{ color: '#4ec9b0' }}>●</span> {s.done}</span>
-                  <span><span style={{ color: '#007acc' }}>●</span> {s.ip}</span>
-                  <span><span style={{ color: '#dcdcaa' }}>●</span> {s.todo}</span>
+                <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 12, color: '#888' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#4ec9b0' }}>●</span> {s.done} Done</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#007acc' }}>●</span> {s.ip} In Progress</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#444' }}>●</span> {s.todo} Pending</div>
                 </div>
               </div>
             ))}
           </div>}
 
           {view === 'burndown' && <div>
-            <h4 style={{ color: '#d4d4d4', fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Sprint Burndown</h4>
-            <div style={{ background: '#252526', borderRadius: 6, padding: 16, border: '1px solid #2d2d2d' }}>
-              <ResponsiveContainer width="100%" height={280}>
-                <AreaChart data={burndown}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                  <XAxis dataKey="date" stroke="#666" fontSize={10} tickLine={false} />
-                  <YAxis stroke="#666" fontSize={10} tickLine={false} />
-                  <RTooltip contentStyle={{ background: '#1e1e1e', border: '1px solid #3c3c3c', borderRadius: 4, fontSize: 11 }} itemStyle={{ color: '#ccc' }} />
-                  <Area type="monotone" dataKey="ideal" stroke="#555" fill="#55555520" strokeDasharray="5 5" name="Ideal" />
-                  <Area type="monotone" dataKey="remaining" stroke="#007acc" fill="#007acc20" name="Remaining" />
-                </AreaChart>
-              </ResponsiveContainer>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <h4 style={{ color: '#d4d4d4', fontSize: 15, fontWeight: 600, margin: 0 }}>Project Burndown</h4>
+              <div style={{ display: 'flex', gap: 4, background: '#252526', padding: 3, borderRadius: 6, border: '1px solid #3c3c3c' }}>
+                <button onClick={() => setSelectedMember('all')} style={{ padding: '3px 10px', borderRadius: 3, border: 'none', background: selectedMember === 'all' ? '#007acc' : '#2d2d2d', color: selectedMember === 'all' ? '#fff' : '#888', fontSize: 11, cursor: 'pointer' }}>Global</button>
+                {MEMBERS.map(m => (
+                  <button key={m} onClick={() => setSelectedMember(m)} style={{ padding: '3px 10px', borderRadius: 3, border: 'none', background: selectedMember === m ? MC[m] : '#2d2d2d', color: selectedMember === m ? '#fff' : '#888', fontSize: 11, cursor: 'pointer' }}>{m}</button>
+                ))}
+              </div>
             </div>
-            <h4 style={{ color: '#d4d4d4', fontSize: 13, fontWeight: 600, margin: '20px 0 12px' }}>Completion Velocity by Member</h4>
-            <div style={{ background: '#252526', borderRadius: 6, padding: 16, border: '1px solid #2d2d2d' }}>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={memberStats} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#333" horizontal={false} />
-                  <XAxis type="number" stroke="#666" fontSize={10} tickLine={false} domain={[0, 100]} />
-                  <YAxis dataKey="name" type="category" stroke="#666" fontSize={11} tickLine={false} width={80} />
-                  <RTooltip contentStyle={{ background: '#1e1e1e', border: '1px solid #3c3c3c', borderRadius: 4, fontSize: 11 }} formatter={(v) => `${v}%`} />
-                  <Bar dataKey="vel" radius={[0, 3, 3, 0]} name="Velocity">
-                    {memberStats.map((e, i) => <Cell key={i} fill={e.color} />)}
-                  </Bar>
-                </BarChart>
+            <div style={{ background: '#252526', borderRadius: 8, padding: '24px 16px', border: '1px solid #2d2d2d' }}>
+              <ResponsiveContainer width="100%" height={320}>
+                <AreaChart data={burndown}>
+                  <defs>
+                    <linearGradient id="colorRemain" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#007acc" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#007acc" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                  <XAxis dataKey="date" stroke="#666" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#666" fontSize={11} tickLine={false} axisLine={false} />
+                  <RTooltip
+                    contentStyle={{ background: '#1e1e1e', border: '1px solid #3c3c3c', borderRadius: 8, fontSize: 13, boxShadow: '0 8px 16px rgba(0,0,0,.4)' }}
+                    itemStyle={{ color: '#d4d4d4' }}
+                    labelStyle={{ color: '#888', marginBottom: 4 }}
+                  />
+                  <Area type="monotone" dataKey="ideal" stroke="#555" fill="transparent" strokeDasharray="5 5" name="Ideal Baseline" />
+                  <Area type="monotone" dataKey="remaining" stroke="#007acc" strokeWidth={3} fillOpacity={1} fill="url(#colorRemain)" name="Remaining Effort" />
+                </AreaChart>
               </ResponsiveContainer>
             </div>
           </div>}
 
           {view === 'heatmap' && <div>
-            <h4 style={{ color: '#d4d4d4', fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Workload Heatmap <span style={{ color: '#888', fontWeight: 400, fontSize: 11 }}>(active tasks per day)</span></h4>
-            <div style={{ background: '#252526', borderRadius: 6, padding: 16, border: '1px solid #2d2d2d', overflowX: 'auto' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: `80px repeat(${heatmap.length},1fr)`, gap: 2, fontSize: 10 }}>
+            <h4 style={{ color: '#d4d4d4', fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Resource Workload Heatmap <span style={{ color: '#888', fontWeight: 400, fontSize: 13 }}>— Daily Active Tasks & Estimated Hours</span></h4>
+            <div style={{ background: '#252526', borderRadius: 8, border: '1px solid #2d2d2d', overflowX: 'auto', padding: '16px', position: 'relative' }} className="stats-scroll">
+              <style>{`.stats-scroll::-webkit-scrollbar { height: 10px; } .stats-scroll::-webkit-scrollbar-thumb { background: #3c3c3c; border-radius: 5px; }`}</style>
+              <div style={{ display: 'grid', gridTemplateColumns: `100px repeat(${heatmap.length}, minmax(44px, 1fr))`, gap: 4, minWidth: 1200 }}>
                 <div />
-                {heatmap.map((d, i) => <div key={i} style={{ textAlign: 'center', color: '#666', padding: '2px 0' }}>{d.date as string}</div>)}
-                {MEMBERS.map(m => <Fragment key={m}>
-                  <div style={{ color: MC[m], fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4, padding: '2px 4px' }}><Av name={m} size={16} />{m}</div>
-                  {heatmap.map((d, i) => {
-                    const v = (d[m] as number) || 0;
-                    const bg = v === 0 ? '#1e1e1e' : v === 1 ? MC[m] + '33' : v === 2 ? MC[m] + '66' : MC[m] + 'aa';
-                    return <div key={m + i} style={{ background: bg, borderRadius: 2, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', color: v > 0 ? '#fff' : '#333', fontSize: 9, fontWeight: 600 }}>{v > 0 ? v : ''}</div>;
-                  })}
-                </Fragment>)}
+                {heatmap.map((d, i) => <div key={i} style={{ textAlign: 'center', color: '#666', padding: '4px 0', fontSize: 11, fontWeight: 600 }}>{d.date as string}</div>)}
+
+                {MEMBERS.map(m => (
+                  <Fragment key={m}>
+                    <div style={{ color: MC[m], fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, padding: '6px 4px', fontSize: 12 }}><Av name={m} size={20} />{m}</div>
+                    {heatmap.map((d, i) => {
+                      const v = (d[m] as number) || 0;
+                      const hrs = (d[m + '_hrs'] as number) || 0;
+                      const bg = v === 0 ? '#1a1a1b' : v === 1 ? MC[m] + '15' : v === 2 ? MC[m] + '35' : v === 3 ? MC[m] + '60' : MC[m] + '90';
+                      const isHigh = hrs > 6;
+                      return (
+                        <div key={m + i}
+                          onMouseEnter={e => {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            setHoveredCell({ member: m, index: i, x: rect.left + rect.width / 2, y: rect.top });
+                          }}
+                          onMouseLeave={() => setHoveredCell(null)}
+                          style={{ background: bg, borderRadius: 4, height: 42, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: v > 0 ? '#fff' : '#2a2a2a', border: isHigh ? `1px solid ${MC[m]}` : '1px solid transparent', transition: 'all .2s', cursor: 'default' }}>
+                          <span style={{ fontSize: 13, fontWeight: 700 }}>{v > 0 ? v : ''}</span>
+                          {hrs > 0 && <span style={{ fontSize: 9, opacity: 0.8, transform: 'scale(0.8)' }}>{hrs % 1 === 0 ? hrs : hrs.toFixed(1)}h</span>}
+                        </div>
+                      );
+                    })}
+                  </Fragment>
+                ))}
+              </div>
+
+              {hoveredCell && heatmap[hoveredCell.index] && (
+                <div style={{
+                  position: 'fixed', left: hoveredCell.x, top: hoveredCell.y - 10, transform: 'translate(-50%, -100%)',
+                  background: '#252526', border: '1px solid #444', borderRadius: 8, padding: '10px 14px', zIndex: 6000,
+                  pointerEvents: 'none', boxShadow: '0 10px 30px rgba(0,0,0,.6)', minWidth: 200
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, borderBottom: '1px solid #3c3c3c', paddingBottom: 6 }}>
+                    <Av name={hoveredCell.member} size={20} />
+                    <span style={{ color: '#d4d4d4', fontSize: 13, fontWeight: 600 }}>{hoveredCell.member}</span>
+                    <span style={{ color: '#666', fontSize: 11, marginLeft: 'auto' }}>{heatmap[hoveredCell.index].fullDate}</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {heatmap[hoveredCell.index][hoveredCell.member + '_tasks'].length > 0 ? (
+                      heatmap[hoveredCell.index][hoveredCell.member + '_tasks'].map((t: any, i: number) => (
+                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                          <span style={{ color: '#aaa', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
+                          <span style={{ color: MC[hoveredCell.member], fontSize: 11, fontWeight: 600 }}>{t.dailyHrs % 1 === 0 ? t.dailyHrs : t.dailyHrs.toFixed(1)}h</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div style={{ color: '#555', fontSize: 12 }}>No active tasks</div>
+                    )}
+                  </div>
+                  <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid #3c3c3c', display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                    <span style={{ color: '#666' }}>Daily Total:</span>
+                    <span style={{ color: '#fff', fontWeight: 600 }}>{heatmap[hoveredCell.index][hoveredCell.member + '_hrs'].toFixed(1)}h</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div style={{ marginTop: 24 }}>
+              <h4 style={{ color: '#d4d4d4', fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Total Capacity Distribution <span style={{ color: '#888', fontWeight: 400, fontSize: 13 }}>(Project Hours Breakdown)</span></h4>
+              <div style={{ background: '#252526', borderRadius: 8, padding: 16, border: '1px solid #2d2d2d' }}>
+                <ResponsiveContainer width="100%" height={240}>
+                  <BarChart data={memberStats}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                    <XAxis dataKey="name" stroke="#666" fontSize={11} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#666" fontSize={11} tickLine={false} axisLine={false} />
+                    <RTooltip
+                      contentStyle={{ background: '#1e1e1e', border: '1px solid #3c3c3c', borderRadius: 8, fontSize: 13 }}
+                      itemStyle={{ color: '#d4d4d4' }}
+                      labelStyle={{ color: '#888', marginBottom: 4 }}
+                      cursor={{ fill: '#ffffff05' }}
+                    />
+                    <Bar dataKey="totalH" name="Total Est. Hours" radius={[4, 4, 0, 0]}>
+                      {memberStats.map((e, i) => <Cell key={i} fill={e.color} fillOpacity={0.8} />)}
+                    </Bar>
+                    <Bar dataKey="doneH" name="Completed Hours" radius={[4, 4, 0, 0]}>
+                      {memberStats.map((e, i) => <Cell key={i} fill={e.color} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             </div>
           </div>}
 
           {view === 'tags' && <div>
-            <h4 style={{ color: '#d4d4d4', fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Task Distribution by Tag</h4>
+            <h4 style={{ color: '#d4d4d4', fontSize: 15, fontWeight: 600, marginBottom: 16 }}>Project Focus & Categorization</h4>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-              <div style={{ background: '#252526', borderRadius: 6, padding: 16, border: '1px solid #2d2d2d' }}>
-                <ResponsiveContainer width="100%" height={250}>
+              <div style={{ background: '#252526', borderRadius: 8, padding: 16, border: '1px solid #2d2d2d' }}>
+                <div style={{ fontSize: 12, color: '#888', marginBottom: 16, textAlign: 'center', textTransform: 'uppercase', letterSpacing: '.05em' }}>Tag Frequency</div>
+                <ResponsiveContainer width="100%" height={260}>
                   <PieChart>
-                    <Pie data={tagDist} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} innerRadius={45} strokeWidth={0}>
+                    <Pie data={tagDist} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} innerRadius={60} strokeWidth={0} paddingAngle={4}>
                       {tagDist.map((_e, i) => <Cell key={i} fill={chartColors[i % chartColors.length]} />)}
                     </Pie>
-                    <RTooltip contentStyle={{ background: '#1e1e1e', border: '1px solid #3c3c3c', borderRadius: 4, fontSize: 11 }} />
-                    <Legend iconSize={8} wrapperStyle={{ fontSize: 11, color: '#ccc' }} />
+                    <RTooltip
+                      contentStyle={{ background: '#1e1e1e', border: '1px solid #3c3c3c', borderRadius: 8, fontSize: 13 }}
+                      itemStyle={{ color: '#d4d4d4' }}
+                      labelStyle={{ color: '#888', marginBottom: 4 }}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              <div style={{ background: '#252526', borderRadius: 6, padding: 16, border: '1px solid #2d2d2d' }}>
-                <ResponsiveContainer width="100%" height={250}>
+              <div style={{ background: '#252526', borderRadius: 8, padding: 16, border: '1px solid #2d2d2d' }}>
+                <div style={{ fontSize: 12, color: '#888', marginBottom: 16, textAlign: 'center', textTransform: 'uppercase', letterSpacing: '.05em' }}>Task Count Distribution</div>
+                <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={tagDist}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                    <XAxis dataKey="name" stroke="#666" fontSize={10} tickLine={false} angle={-30} textAnchor="end" height={50} />
-                    <YAxis stroke="#666" fontSize={10} tickLine={false} />
-                    <RTooltip contentStyle={{ background: '#1e1e1e', border: '1px solid #3c3c3c', borderRadius: 4, fontSize: 11 }} />
-                    <Bar dataKey="value" radius={[3, 3, 0, 0]}>
+                    <CartesianGrid strokeDasharray="2 2" stroke="#333" vertical={false} />
+                    <XAxis dataKey="name" stroke="#666" fontSize={11} tickLine={false} axisLine={false} height={40} angle={-30} textAnchor="end" />
+                    <YAxis stroke="#666" fontSize={11} tickLine={false} axisLine={false} />
+                    <RTooltip
+                      contentStyle={{ background: '#1e1e1e', border: '1px solid #3c3c3c', borderRadius: 8, fontSize: 13 }}
+                      itemStyle={{ color: '#d4d4d4' }}
+                      labelStyle={{ color: '#888', marginBottom: 4 }}
+                      cursor={{ fill: '#ffffff05' }}
+                    />
+                    <Bar dataKey="value" name="Tasks" radius={[4, 4, 0, 0]}>
                       {tagDist.map((_e, i) => <Cell key={i} fill={chartColors[i % chartColors.length]} />)}
                     </Bar>
                   </BarChart>
