@@ -10,12 +10,18 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
-    # CORS — allow any origin on dev ports (credentials require explicit origin, not *)
+    # CORS — allow specific hostnames and dev ports
     @app.after_request
     def cors(response):
         origin = request.headers.get('Origin', '')
-        allowed_ports = [':5173', ':4173']
-        if any(origin.endswith(p) for p in allowed_ports) or origin in ('http://localhost:5173', 'http://127.0.0.1:5173'):
+        allowed_domains = ['localhost', '127.0.0.1', 'heliweb1', 'heliweb1.dmntai.intra']
+        
+        is_allowed = False
+        # Allow if origin is from an allowed domain
+        if any(f"//{domain}" in origin for domain in allowed_domains):
+            is_allowed = True
+            
+        if is_allowed and origin:
             response.headers['Access-Control-Allow-Origin'] = origin
             response.headers['Access-Control-Allow-Credentials'] = 'true'
             response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
@@ -51,4 +57,4 @@ def create_app():
 
 if __name__ == '__main__':
     app = create_app()
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5104, debug=True)

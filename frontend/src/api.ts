@@ -1,4 +1,7 @@
-const BASE = `http://${window.location.hostname}:5000/api`;
+// Use relative Nginx reverse proxy path in production, and standard port 5104 via local name in dev
+const BASE = import.meta.env.PROD 
+  ? '/k11c0_kezban/api'
+  : `http://${window.location.hostname}:5104/api`;
 
 async function req(path: string, opts: RequestInit = {}) {
   const res = await fetch(`${BASE}${path}`, {

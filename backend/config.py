@@ -22,3 +22,5 @@ class Config:
     # Session — login once, stay logged in for 30 days
     REMEMBER_COOKIE_DURATION = timedelta(days=30)
     PERMANENT_SESSION_LIFETIME = timedelta(days=30)
+    SESSION_COOKIE_PATH = '/k11c0_kezban'
+    SESSION_COOKIE_NAME = 'kanban_kezban_session'
