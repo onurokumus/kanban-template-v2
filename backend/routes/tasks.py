@@ -35,7 +35,7 @@ def create_task():
         completedDate=data.get('completedDate'),
         progress=data.get('progress', 0),
         isEpic=data.get('isEpic', False),
-        epicId=data.get('epicId'),
+        epicId=data.get('epicId') or None,
         created=data.get('created'),
         dependencies=data.get('dependencies', []),
     )
@@ -81,7 +81,10 @@ def update_task(task_id):
     ]
     for field in simple_fields:
         if field in data:
-            setattr(task, field, data[field])
+            val = data[field]
+            if field == 'epicId' and not val:
+                val = None
+            setattr(task, field, val)
 
     db.session.commit()
     return jsonify(task.to_dict())
