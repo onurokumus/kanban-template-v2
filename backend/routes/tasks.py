@@ -94,6 +94,14 @@ def update_task(task_id):
 @login_required
 def delete_task(task_id):
     task = Task.query.get_or_404(task_id)
+    
+    # Safely detach any child tasks if this task is an Epic
+    # This prevents PostgreSQL ForeignKeyViolation errors without needing DB migrations
+    if task.isEpic:
+        child_tasks = Task.query.filter_by(epicId=task_id).all()
+        for child in child_tasks:
+            child.epicId = None
+            
     db.session.delete(task)
     db.session.commit()
     return jsonify({'ok': True})
