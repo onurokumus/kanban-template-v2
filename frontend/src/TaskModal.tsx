@@ -319,7 +319,7 @@ export const TaskModal = ({ task, onClose, onUpdate, onDelete, allTasks, toast, 
             </button>
           )}
           <button
-            onClick={() => setConfirm({ title: 'Delete Task?', msg: 'Are you sure you want to delete this task? This cannot be undone.', onConfirm: () => { onDelete(task.id); onClose(); toast('Task deleted', '#f44747'); } })}
+            onClick={() => setConfirm({ title: 'Delete Task?', msg: 'Are you sure you want to delete this task? This cannot be undone.', onConfirm: () => { onDelete(task.id); onClose(); } })}
             style={{ background: 'color-mix(in srgb, var(--prio-critical), transparent 90%)', border: '1px solid var(--prio-critical)', color: 'var(--prio-critical)', cursor: 'pointer', padding: '8px', borderRadius: 8, display: 'flex', transition: 'all .2s' }}
             onMouseEnter={e => { e.currentTarget.style.background = 'var(--prio-critical)'; e.currentTarget.style.color = '#fff'; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'color-mix(in srgb, var(--prio-critical), transparent 90%)'; e.currentTarget.style.color = 'var(--prio-critical)'; }}
