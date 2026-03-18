@@ -5,4 +5,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   base: '/k11c0_kezban/',
+  server: {
+    allowedHosts: ['heliweb1', 'heliweb1.dmntai.intra'],
+  },
 })
