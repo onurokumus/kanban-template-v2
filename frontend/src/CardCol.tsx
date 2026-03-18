@@ -213,7 +213,7 @@ export const CardCol = ({ title, status, tasks, color, collapsed, onToggle, onTa
             
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
               <span style={{ fontSize: 10, color: '#fff', fontWeight: 800, padding: '2px 6px', borderRadius: 4, background: PC[task.priority], letterSpacing: '.02em' }}>{task.priority}</span>
-              {task.actualHours && task.actualHours > 0 && (
+              {(task.actualHours ?? 0) > 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'color-mix(in srgb, var(--accent), transparent 85%)', padding: '2px 6px', borderRadius: 4, border: '1px solid var(--accent)' }}>
                    <I.Clock s={10} />
                    <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--accent)' }}>{task.actualHours}h</span>
@@ -232,7 +232,7 @@ export const CardCol = ({ title, status, tasks, color, collapsed, onToggle, onTa
             <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.4, marginBottom: 8, letterSpacing: '-0.01em' }}>{task.title}</div>
             
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              {task.estHours && <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 12, color: 'var(--text-subtle)' }}><I.Clock />{task.estHours}h</span>}
+              {(task.estHours ?? 0) > 0 && <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 12, color: 'var(--text-subtle)' }}><I.Clock />{task.estHours}h</span>}
               {task.deadline && <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 12, color: task.status !== 'completed' && parse(task.deadline)! < today ? '#f44747' : 'var(--text-subtle)' }}><I.Cal />{task.deadline.slice(5)}</span>}
               {task.comments?.length > 0 && <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 12, color: 'var(--text-subtle)' }}><I.Chat />{task.comments.length}</span>}
               {(task.dependencies || []).length > 0 && <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 12, color: 'var(--accent-purple)' }}><I.Link />{task.dependencies.length}</span>}

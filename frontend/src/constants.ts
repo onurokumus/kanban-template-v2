@@ -59,10 +59,9 @@ export const isTaskBlocked = (task: Task, allTasks: Task[]): boolean =>
     return dep && dep.status !== 'completed';
   });
 
-let _id = 200;
-export const uid = (): string => `t${_id++}`;
-export const sid = (): string => `s${_id++}`;
-export const coid = (): string => `c${_id++}`;
+export const uid = (): string => crypto.randomUUID();
+export const sid = (): string => crypto.randomUUID();
+export const coid = (): string => crypto.randomUUID();
 
 
 export const initTasks = (): Task[] => [
