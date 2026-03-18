@@ -41,8 +41,11 @@ export const NewTaskModal = ({ onClose, onAdd, defaultStatus, toast: addToast, e
       delete task.ganttStart;
       delete task.ganttEnd;
       delete task.deadline;
+      delete task.epicId;
     } else if (f.epicId) {
       task.epicId = f.epicId;
+    } else {
+      delete task.epicId;
     }
     if (f.status === 'completed') task.completedDate = fmt(today);
     onAdd(task); onClose(); addToast('Task created', '#4ec9b0');
@@ -70,12 +73,12 @@ export const NewTaskModal = ({ onClose, onAdd, defaultStatus, toast: addToast, e
             <div><label style={{ color: 'var(--text-subtle)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>Assignee</label><select value={f.assignee} onChange={e => sF({ ...f, assignee: e.target.value })} style={is}>{MEMBERS.map(m => <option key={m}>{m}</option>)}</select></div>
             <div><label style={{ color: 'var(--text-subtle)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>Priority</label><select value={f.priority} onChange={e => sF({ ...f, priority: e.target.value })} style={is}>{PRIORITIES.map(p => <option key={p}>{p}</option>)}</select></div>
             <div><label style={{ color: 'var(--text-subtle)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>Est. Hours</label><input type="number" value={f.estHours} onChange={e => sF({ ...f, estHours: +e.target.value })} style={is} /></div>
-            
+
             <div style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
               <input type="checkbox" id="epicToggle" checked={f.isEpic} onChange={e => sF({ ...f, isEpic: e.target.checked, epicId: e.target.checked ? '' : f.epicId })} style={{ accentColor: 'var(--accent)', cursor: 'pointer' }} />
               <label htmlFor="epicToggle" style={{ fontSize: 13, color: 'var(--text-main)', cursor: 'pointer', fontWeight: 500 }}>Mark as Epic (Indefinite Project)</label>
             </div>
-            
+
             {!f.isEpic && (
               <div style={{ gridColumn: 'span 2' }}>
                 <label style={{ color: 'var(--text-subtle)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>Parent Epic (Optional)</label>
@@ -85,11 +88,6 @@ export const NewTaskModal = ({ onClose, onAdd, defaultStatus, toast: addToast, e
                 </select>
               </div>
             )}
-            
-            <div style={{ opacity: f.isEpic ? 0.3 : 1, pointerEvents: f.isEpic ? 'none' : 'auto', transition: 'opacity .2s' }}>
-              <label style={{ color: 'var(--text-subtle)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>Start Date</label>
-              <DatePicker value={f.ganttStart} onChange={v => sF({ ...f, ganttStart: v })} />
-            </div>
 
             <div style={{ gridColumn: 'span 2', opacity: f.isEpic ? 0.3 : 1, pointerEvents: f.isEpic ? 'none' : 'auto', transition: 'opacity .2s' }}>
               <label style={{ color: 'var(--text-subtle)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>Deadline</label>

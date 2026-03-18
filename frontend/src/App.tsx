@@ -134,7 +134,7 @@ export default function App() {
     addToast('Redone', '#dcdcaa');
   }, [future, tasks, addToast]);
 
-  const updateTask = useCallback((id: string, u: Partial<Task>, skipHistory = false) => {
+  const updateTask = useCallback((id: string, u: Partial<Task>, skipHistory = false, skipSync = false) => {
     if (!skipHistory) {
       pushHistory();
     }
@@ -146,8 +146,10 @@ export default function App() {
       return t;
     }));
     setSel(p => p && p.id === id ? { ...p, ...u } : p);
-    // Sync to backend
-    taskAPI.update(id, u).catch(err => addToast(`Sync failed: ${err.message}`, '#f44747'));
+    // Sync to backend only if skipSync is false
+    if (!skipSync) {
+      taskAPI.update(id, u).catch(err => addToast(`Sync failed: ${err.message}`, '#f44747'));
+    }
   }, [pushHistory, fireConfetti, addToast]);
 
   const deleteTask = useCallback((id: string) => {

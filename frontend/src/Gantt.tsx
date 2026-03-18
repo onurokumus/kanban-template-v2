@@ -8,7 +8,7 @@ import { CtxMenu } from "./CtxMenu.tsx";
 interface Props {
   tasks: Task[];
   onTaskClick: (task: Task) => void;
-  onUpdate: (id: string, u: Partial<Task>, skipHistory?: boolean) => void;
+  onUpdate: (id: string, u: Partial<Task>, skipHistory?: boolean, skipSync?: boolean) => void;
   searchFilter: string;
   memberFilter: string[];
   tagFilter: string[];
@@ -55,11 +55,44 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
   const gRef = useRef<HTMLDivElement>(null);
   const draggedRef = useRef(false);
 
-  // Dynamic range state: start with +/- 1 month
-  const [range, setRange] = useState({ 
-    start: addD(today, -30), 
-    end: addD(today, 30) 
+  // Dynamic range state: start with +/- 1 month, expand to fit tasks
+  const [range, setRange] = useState(() => {
+    let minD = addD(today, -30);
+    let maxD = addD(today, 30);
+    tasks.forEach(t => {
+      if (t.ganttStart) { const s = parse(t.ganttStart); if (s && s < minD) minD = s; }
+      if (t.ganttEnd) { const e = parse(t.ganttEnd); if (e && e > maxD) maxD = e; }
+      if (t.deadline) { const d = parse(t.deadline); if (d && d > maxD) maxD = d; }
+      t.subtasks?.forEach(sub => {
+        if (sub.ganttStart) { const s = parse(sub.ganttStart); if (s && s < minD) minD = s; }
+        if (sub.deadline) { const e = parse(sub.deadline); if (e && e > maxD) maxD = e; }
+      });
+    });
+    return { start: minD, end: addD(maxD, 14) };
   });
+
+  useEffect(() => {
+    let newStart = range.start;
+    let newEnd = range.end;
+    let changed = false;
+
+    tasks.forEach(t => {
+      if (t.ganttStart) { const s = parse(t.ganttStart); if (s && s < newStart) { newStart = s; changed = true; } }
+      if (t.ganttEnd) { const e = parse(t.ganttEnd); if (e && e > newEnd) { newEnd = e; changed = true; } }
+      if (t.deadline) { const e = parse(t.deadline); if (e && e > newEnd) { newEnd = e; changed = true; } }
+      t.subtasks?.forEach(sub => {
+        if (sub.ganttStart) { const s = parse(sub.ganttStart); if (s && s < newStart) { newStart = s; changed = true; } }
+        if (sub.deadline) { const e = parse(sub.deadline); if (e && e > newEnd) { newEnd = e; changed = true; } }
+      });
+    });
+
+    if (changed) {
+      setRange(prev => ({
+        start: newStart < prev.start ? newStart : prev.start,
+        end: newEnd > prev.end ? addD(newEnd, 14) : prev.end
+      }));
+    }
+  }, [tasks]);
 
   const DAY_W = zoom === 'month' ? 8 : (zoom === 'week' ? 20 : 44);
 
@@ -86,7 +119,7 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
   useLayoutEffect(() => {
     if (!gRef.current) return;
     const vW = gRef.current.clientWidth - SIDEBAR_W;
-    
+
     if (!initialScrolled) {
       if (todayIdx !== -1 && vW > 0) {
         // Center on the middle of Today
@@ -114,7 +147,7 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
   const handleScroll = () => {
     if (!gRef.current || isExpandingRef.current) return;
     const { scrollLeft, scrollWidth, clientWidth } = gRef.current;
-    
+
     // Near left edge -> Prepend 60 days
     if (scrollLeft < 500) {
       isExpandingRef.current = true;
@@ -122,7 +155,7 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
       pendingPrepRef.current = expansion;
       setRange(prev => ({ ...prev, start: addD(prev.start, -expansion) }));
     }
-    
+
     // Near right edge -> Append 60 days
     else if (scrollWidth - (scrollLeft + clientWidth) < 500) {
       isExpandingRef.current = true;
@@ -188,7 +221,7 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
   const { taskPositions, laneBounds } = useMemo(() => {
     const pos: Record<string, { x: number; xEnd: number; y: number }> = {};
     const bounds: Record<string, { top: number; bottom: number }> = {};
-    let cumY = 56; 
+    let cumY = 56;
     MEMBERS.forEach(m => {
       if (memberFilter.length > 0 && !memberFilter.includes(m)) return;
       const top = cumY;
@@ -237,21 +270,21 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
     const move = (e: PointerEvent) => {
       const dx = e.clientX - drag.startX;
       const dy = e.clientY - drag.startY;
-      
+
       let effectiveAxis = drag.axis;
       if (!effectiveAxis) {
         if (Math.abs(dx) > 5) effectiveAxis = 'x';
         else if (Math.abs(dy) > 5 && drag.mode === 'move' && !drag.subtaskId) effectiveAxis = 'y';
-        
+
         if (effectiveAxis) {
-           setDrag(prev => prev ? { ...prev, axis: effectiveAxis } : null);
+          setDrag(prev => prev ? { ...prev, axis: effectiveAxis } : null);
         }
       }
 
       setDrag(prev => prev ? { ...prev, currentX: e.clientX, currentY: e.clientY } : null);
 
       if (Math.abs(dx) > 5 || Math.abs(dy) > 5) draggedRef.current = true;
-      
+
       const dd = Math.round(dx / DAY_W);
       const oS = parse(drag.oS)!, oE = parse(drag.oE)!;
       const target = tasks.find(t => t.id === drag.taskId);
@@ -273,14 +306,14 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
               if (nS && target.ganttStart && nS < target.ganttStart) update.ganttStart = nS;
               if (nE && target.deadline && nE > target.deadline) { update.ganttEnd = nE; update.deadline = nE; }
             }
-            onUpdate(drag.taskId, update, true);
+            onUpdate(drag.taskId, update, true, true);
           } else {
-            if (drag.mode === 'move') { 
-              const ne = fmt(addD(oE, dd)); 
-              onUpdate(drag.taskId, { ganttStart: fmt(addD(oS, dd)), ganttEnd: ne, deadline: ne }, true); 
+            if (drag.mode === 'move') {
+              const ne = fmt(addD(oE, dd));
+              onUpdate(drag.taskId, { ganttStart: fmt(addD(oS, dd)), ganttEnd: ne, deadline: ne }, true, true);
             }
-            else if (drag.mode === 'rl') { const ns = addD(oS, dd); if (diffD(ns, oE) >= 1) onUpdate(drag.taskId, { ganttStart: fmt(ns) }, true); }
-            else if (drag.mode === 'rr') { const ne = addD(oE, dd); if (diffD(oS, ne) >= 1) { const neF = fmt(ne); onUpdate(drag.taskId, { ganttEnd: neF, deadline: neF }, true); } }
+            else if (drag.mode === 'rl') { const ns = addD(oS, dd); if (diffD(ns, oE) >= 1) onUpdate(drag.taskId, { ganttStart: fmt(ns) }, true, true); }
+            else if (drag.mode === 'rr') { const ne = addD(oE, dd); if (diffD(oS, ne) >= 1) { const neF = fmt(ne); onUpdate(drag.taskId, { ganttEnd: neF, deadline: neF }, true, true); } }
           }
         }
       }
@@ -302,30 +335,63 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
       }
     };
     const up = (e: PointerEvent) => {
-      // When horizontal drag of a main task ends, also update subtask dates
-      if (drag.mode === 'move' && !drag.subtaskId && drag.axis === 'x') {
+      // When horizontal drag ends
+      if (draggedRef.current && (drag.axis === 'x' || (!drag.axis && Math.abs(e.clientX - drag.startX) > 0))) {
         const dx = e.clientX - drag.startX;
         const dd = Math.round(dx / DAY_W);
         if (dd !== 0) {
           const target = tasks.find(t => t.id === drag.taskId);
-          if (target && target.subtasks && target.subtasks.length > 0) {
-            const updatedSubs = target.subtasks.map(s => {
-              const newS = s.ganttStart ? fmt(addD(parse(s.ganttStart)!, dd)) : s.ganttStart;
-              const newE = s.deadline ? fmt(addD(parse(s.deadline)!, dd)) : s.deadline;
-              return { ...s, ganttStart: newS, deadline: newE };
-            });
-            onUpdate(drag.taskId, { subtasks: updatedSubs });
+          if (target && !target.isEpic) {
+            const oS = parse(drag.oS)!, oE = parse(drag.oE)!;
+            if (drag.subtaskId) {
+              let nS: string | undefined, nE: string | undefined;
+              const subs = target.subtasks.map(s => {
+                if (s.id !== drag.subtaskId) return s;
+                if (drag.mode === 'move') { nS = fmt(addD(oS, dd)); nE = fmt(addD(oE, dd)); return { ...s, ganttStart: nS, deadline: nE }; }
+                if (drag.mode === 'rl') { const ns = addD(oS, dd); if (diffD(ns, oE) >= 1) { nS = fmt(ns); return { ...s, ganttStart: nS }; } return s; }
+                const ne = addD(oE, dd); if (diffD(oS, ne) >= 1) { nE = fmt(ne); return { ...s, deadline: nE }; } return s;
+              });
+              const update: Partial<Task> = { subtasks: subs };
+              if (target.status === 'inprogress') {
+                if (nS && target.ganttStart && nS < target.ganttStart) update.ganttStart = nS;
+                if (nE && target.deadline && nE > target.deadline) { update.ganttEnd = nE; update.deadline = nE; }
+              }
+              onUpdate(drag.taskId, update); // this one saves
+            } else {
+              const update: Partial<Task> = {};
+              if (drag.mode === 'move') {
+                const ne = fmt(addD(oE, dd));
+                update.ganttStart = fmt(addD(oS, dd)); update.ganttEnd = ne; update.deadline = ne;
+                if (target.subtasks && target.subtasks.length > 0) {
+                  update.subtasks = target.subtasks.map(s => {
+                    const newS = s.ganttStart ? fmt(addD(parse(s.ganttStart)!, dd)) : s.ganttStart;
+                    const newE = s.deadline ? fmt(addD(parse(s.deadline)!, dd)) : s.deadline;
+                    return { ...s, ganttStart: newS, deadline: newE };
+                  });
+                }
+              } else if (drag.mode === 'rl') {
+                const ns = addD(oS, dd);
+                if (diffD(ns, oE) >= 1) update.ganttStart = fmt(ns);
+              } else if (drag.mode === 'rr') {
+                const ne = addD(oE, dd);
+                if (diffD(oS, ne) >= 1) { const neF = fmt(ne); update.ganttEnd = neF; update.deadline = neF; }
+              }
+              if (Object.keys(update).length > 0) {
+                onUpdate(drag.taskId, update); // this one saves
+              }
+            }
           }
         }
       }
+      
       if (drag.mode === 'move' && !drag.subtaskId && drag.axis === 'y') {
         // Find the lane element directly by hit testing
         // Hide the dragged element temporarily so we can get the element underneath it
         const draggedEl = document.getElementById(`task-bar-${drag.taskId}`);
         if (draggedEl) draggedEl.style.pointerEvents = 'none';
-        
+
         const elUnderCursor = document.elementFromPoint(e.clientX, e.clientY);
-        
+
         if (draggedEl) draggedEl.style.pointerEvents = 'auto';
 
         if (elUnderCursor) {
@@ -378,20 +444,20 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
   };
 
   return (
-    <div 
+    <div
       ref={gRef}
       onScroll={handleScroll}
       onPointerDown={handlePanStart}
       style={{ flex: 1, overflow: 'auto', position: 'relative', background: 'var(--bg)', overflowAnchor: 'none', boxSizing: 'border-box', cursor: pan ? 'grabbing' : 'default', userSelect: pan ? 'none' : 'auto' }}
     >
       <div style={{ minWidth: SIDEBAR_W + dates.length * DAY_W, position: 'relative', boxSizing: 'border-box' }}>
-        
+
         {/* HEADER ROW */}
         <div style={{ display: 'flex', position: 'sticky', top: 0, zIndex: 100, background: 'var(--bg)', height: 56, borderBottom: '1px solid var(--border-subtle)', boxSizing: 'border-box' }}>
           <div style={{ position: 'sticky', left: 0, zIndex: 110, width: SIDEBAR_W, flexShrink: 0, padding: '0 12px', display: 'flex', alignItems: 'center', fontSize: 11, color: 'var(--text-subtle)', fontWeight: 700, borderRight: '2px solid var(--border)', background: 'var(--bg)', height: 56, boxSizing: 'border-box', gap: 8 }}>
             <span style={{ flex: 1 }}>MEMBERS</span>
             <div style={{ display: 'flex', gap: 4 }}>
-              <button 
+              <button
                 onClick={() => {
                   const all: Record<string, boolean> = {};
                   MEMBERS.forEach(m => all[m] = true);
@@ -403,7 +469,7 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
               >
                 <I.Collapse s={10} />
               </button>
-              <button 
+              <button
                 onClick={() => setCLanes({})}
                 style={{ background: 'var(--hover)', border: 'none', color: 'var(--text-subtle)', borderBottom: '1px solid var(--border)', borderRadius: 3, padding: '2px 4px', cursor: 'pointer', display: 'flex' }}
                 data-tooltip="Open All"
@@ -411,7 +477,7 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
               >
                 <I.Expand s={10} />
               </button>
-              <button 
+              <button
                 onClick={scrollToToday}
                 style={{ background: 'var(--hover)', border: 'none', color: 'var(--accent)', borderBottom: '1px solid var(--accent)', borderRadius: 3, padding: '2px 4px', cursor: 'pointer', display: 'flex' }}
                 data-tooltip="Focus on Today"
@@ -421,7 +487,7 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
               </button>
             </div>
           </div>
-          
+
           <div style={{ display: 'flex' }}>
             {dates.map((d, i) => {
               const isT = d.toDateString() === today.toDateString();
@@ -429,24 +495,24 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
               const isMon = d.getDay() === 1;
               const isFirstD = d.getDate() === 1;
               const showLabel = zoom === 'month' ? isFirstD : (zoom === 'week' ? isMon : true);
-              
+
               return (
-                <div key={fmt(d)} style={{ 
-                  width: DAY_W, 
-                  flexShrink: 0, 
-                  textAlign: 'center', 
-                  borderRight: (zoom === 'month' && !isFirstD) ? 'none' : ((zoom === 'week' && !isMon) ? 'none' : '1px solid var(--border)'), 
-                  height: 56, 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  justifyContent: 'center', 
+                <div key={fmt(d)} style={{
+                  width: DAY_W,
+                  flexShrink: 0,
+                  textAlign: 'center',
+                  borderRight: (zoom === 'month' && !isFirstD) ? 'none' : ((zoom === 'week' && !isMon) ? 'none' : '1px solid var(--border)'),
+                  height: 56,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center',
                   background: isT ? 'var(--accent)18' : (isW && zoom === 'day') ? 'var(--text-main)08' : 'transparent',
                   position: 'relative',
                   boxSizing: 'border-box'
                 }}>
                   {showLabel && (
-                    <div style={{ 
-                      position: (zoom === 'week' || zoom === 'month') ? 'absolute' : 'static', 
+                    <div style={{
+                      position: (zoom === 'week' || zoom === 'month') ? 'absolute' : 'static',
                       left: (zoom === 'week' || zoom === 'month') ? 0 : 'auto',
                       width: zoom === 'month' ? DAY_W * 30 : (zoom === 'week' ? DAY_W * 7 : '100%'),
                       textAlign: (zoom === 'week' || zoom === 'month') ? 'left' : 'center',
@@ -457,7 +523,7 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
                         {zoom === 'month' ? d.getFullYear() : d.toLocaleDateString('en', { weekday: zoom === 'week' ? 'long' : 'short' })}
                       </div>
                       <div style={{ fontSize: (zoom === 'week' || zoom === 'month') ? 11 : 13, color: isT ? 'var(--accent)' : 'var(--text-dim)', fontWeight: isT ? 700 : 400 }}>
-                        {zoom === 'month' ? d.toLocaleDateString('en', { month: 'long' }) : d.getDate()} 
+                        {zoom === 'month' ? d.toLocaleDateString('en', { month: 'long' }) : d.getDate()}
                         {zoom === 'week' ? ' ' + d.toLocaleDateString('en', { month: 'short' }) : ''}
                       </div>
                       {zoom === 'day' && (isFirstD || i === 0) && (
@@ -474,7 +540,7 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
         </div>
 
         {/* BODY AREA */}
-        <div 
+        <div
           style={{ position: 'relative' }}
           onDragOver={e => e.preventDefault()}
           onDrop={e => {
@@ -489,7 +555,7 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
             onUpdate(tid, { status: 'inprogress', ganttStart: dropDate, ganttEnd: endD, deadline: endD, completedDate: undefined });
           }}
         >
-          
+
           <div style={{ position: 'absolute', top: 0, left: SIDEBAR_W, bottom: 0, right: 0, pointerEvents: 'none', zIndex: 0 }}>
             {dates.map((d) => {
               const isMon = d.getDay() === 1;
@@ -499,12 +565,12 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
               if (zoom === 'week' && !isMon && !isW) return null;
               const i = diffD(range.start, d);
               return (
-                <div key={fmt(d)} style={{ 
-                  position: 'absolute', 
-                  left: i * DAY_W, 
-                  top: 0, bottom: 0, 
-                  width: DAY_W, 
-                  borderRight: (zoom === 'month' && !isFirstD) ? 'none' : ((zoom === 'week' && !isMon) ? 'none' : '1px solid var(--border-subtle)'), 
+                <div key={fmt(d)} style={{
+                  position: 'absolute',
+                  left: i * DAY_W,
+                  top: 0, bottom: 0,
+                  width: DAY_W,
+                  borderRight: (zoom === 'month' && !isFirstD) ? 'none' : ((zoom === 'week' && !isMon) ? 'none' : '1px solid var(--border-subtle)'),
                   background: (isW && zoom !== 'month') ? 'var(--text-dim)08' : 'transparent',
                   boxSizing: 'border-box'
                 }} />
@@ -518,7 +584,7 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
           {showArrows && depLines.length > 0 && <svg style={{ position: 'absolute', top: 0, left: SIDEBAR_W, width: dates.length * DAY_W, height: '100%', pointerEvents: 'none', zIndex: 8 }}>
             <defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--text-subtle)" /></marker></defs>
             {depLines.map((l, i) => {
-              const x1 = l.from.xEnd + 2, y1 = l.from.y - 56; 
+              const x1 = l.from.xEnd + 2, y1 = l.from.y - 56;
               const x2 = l.to.x - 2, y2 = l.to.y - 56;
               const mx = (x1 + x2) / 2;
               return <path key={i} d={`M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`} stroke={l.color ? `color-mix(in srgb, ${l.color}, transparent 55%)` : 'var(--text-subtle)'} strokeWidth="1.5" fill="none" markerEnd="url(#arrow)" strokeDasharray={Math.abs(y2 - y1) > ROW_H ? "4,3" : "none"} />;
@@ -532,7 +598,7 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
             const mt = mTasks[member] || [];
             const isC = cLanes[member];
             const laneH = isC ? 0 : (mt.length === 0 ? 40 : mt.reduce((acc, t) => acc + getTaskH(t), 0));
-            
+
             // To properly highlight during drag, we rely on CSS pointer-events: none on the dragged bar
             // and checking the :hover state natively, OR we do a hit test using DOM APIs on move.
             // For a simpler React-driven approach without spamming hit tests, we'll keep a state in Gantt
@@ -553,16 +619,16 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
 
                 <div style={{ display: 'flex', flexDirection: 'row', position: 'relative' }}>
                   {/* Sticky Labels Layer */}
-                  <div style={{ 
-                    width: SIDEBAR_W, 
-                    flexShrink: 0, 
-                    position: 'sticky', 
-                    left: 0, 
-                    zIndex: 15, 
-                    background: 'var(--bg)', 
+                  <div style={{
+                    width: SIDEBAR_W,
+                    flexShrink: 0,
+                    position: 'sticky',
+                    left: 0,
+                    zIndex: 15,
+                    background: 'var(--bg)',
                     borderRight: '2px solid var(--border)',
-                    overflow: 'hidden', 
-                    transition: 'max-height .25s ease', 
+                    overflow: 'hidden',
+                    transition: 'max-height .25s ease',
                     maxHeight: isC ? 0 : laneH + 10,
                     boxSizing: 'border-box'
                   }}>
@@ -574,57 +640,58 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
                       const isLastChild = isEpicChild && (!nextTask || nextTask.epicId !== t.epicId);
 
                       return (
-                      <div key={t.id} style={{ height: getTaskH(t), display: 'flex', flexDirection: 'column', borderBottom: '1px solid var(--border-subtle)', boxSizing: 'border-box', background: t.isEpic ? 'color-mix(in srgb, var(--accent), transparent 94%)' : 'transparent' }}>
-                        <div 
-                          draggable 
-                          onDragStart={e => e.dataTransfer.setData('tid', t.id)}
-                          style={{ height: 48, display: 'flex', alignItems: 'center', padding: t.isEpic ? '0 10px' : isEpicChild ? '0 10px 0 8px' : '0 10px', gap: 5, cursor: 'pointer' }} 
-                          onClick={() => onTaskClick(t)} 
-                          onContextMenu={e => handleCtx(e, t)}
-                        >
-                          {/* Epic row styling */}
-                          {t.isEpic ? (
-                            <>
-                              <div style={{ width: 3, height: 28, borderRadius: 2, background: 'var(--accent)', flexShrink: 0 }} />
-                              <span style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', background: 'color-mix(in srgb, var(--accent), transparent 82%)', padding: '1px 5px', borderRadius: 3, flexShrink: 0 }}>Epic</span>
-                              <span style={{ fontSize: 12, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, fontWeight: 700 }}>{t.title}</span>
-                              <span style={{ fontSize: 10, color: 'var(--text-subtle)', flexShrink: 0 }}>{tasks.filter(ct => ct.epicId === t.id).length}</span>
-                            </>
-                          ) : isEpicChild ? (
-                            /* Child task row — indented with L-shaped tree connector */
-                            <>
-                              <div style={{ width: 20, flexShrink: 0, position: 'relative', height: 48 }}>
-                                {/* Vertical trunk line — full height for middle children, half for last */}
-                                <div style={{ position: 'absolute', left: 8, top: 0, height: isLastChild ? '50%' : '100%', width: 0, borderLeft: '1.5px solid color-mix(in srgb, var(--accent), transparent 65%)' }} />
-                                {/* Horizontal branch to dot */}
-                                <div style={{ position: 'absolute', left: 8, top: '50%', width: 7, height: 0, borderTop: '1.5px solid color-mix(in srgb, var(--accent), transparent 65%)' }} />
-                                {/* Dot at branch end */}
-                                <div style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', width: 4, height: 4, borderRadius: '50%', background: 'var(--accent)', opacity: .5 }} />
-                              </div>
-                              <span style={{ fontSize: 12, color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, fontWeight: 500 }}>{t.title}</span>
-                              {(t.dependencies || []).length > 0 && <span style={{ opacity: .4 }}><I.Link /></span>}
-                            </>
-                          ) : (
-                            /* Regular task row */
-                            <>
-                              <div style={{ width: 4, height: 4, borderRadius: '50%', background: PC[t.priority], flexShrink: 0 }} />
-                              <span style={{ fontSize: 12, color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, fontWeight: 500 }}>{t.title}</span>
-                              {(t.dependencies || []).length > 0 && <span style={{ opacity: .4 }}><I.Link /></span>}
-                            </>
+                        <div key={t.id} style={{ height: getTaskH(t), display: 'flex', flexDirection: 'column', borderBottom: '1px solid var(--border-subtle)', boxSizing: 'border-box', background: t.isEpic ? 'color-mix(in srgb, var(--accent), transparent 94%)' : 'transparent' }}>
+                          <div
+                            draggable
+                            onDragStart={e => e.dataTransfer.setData('tid', t.id)}
+                            style={{ height: 48, display: 'flex', alignItems: 'center', padding: t.isEpic ? '0 10px' : isEpicChild ? '0 10px 0 8px' : '0 10px', gap: 5, cursor: 'pointer' }}
+                            onClick={() => onTaskClick(t)}
+                            onContextMenu={e => handleCtx(e, t)}
+                          >
+                            {/* Epic row styling */}
+                            {t.isEpic ? (
+                              <>
+                                <div style={{ width: 3, height: 28, borderRadius: 2, background: 'var(--accent)', flexShrink: 0 }} />
+                                <span style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', background: 'color-mix(in srgb, var(--accent), transparent 82%)', padding: '1px 5px', borderRadius: 3, flexShrink: 0 }}>Epic</span>
+                                <span style={{ fontSize: 12, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, fontWeight: 700 }}>{t.title}</span>
+                                <span style={{ fontSize: 10, color: 'var(--text-subtle)', flexShrink: 0 }}>{tasks.filter(ct => ct.epicId === t.id).length}</span>
+                              </>
+                            ) : isEpicChild ? (
+                              /* Child task row — indented with L-shaped tree connector */
+                              <>
+                                <div style={{ width: 20, flexShrink: 0, position: 'relative', height: 48 }}>
+                                  {/* Vertical trunk line — full height for middle children, half for last */}
+                                  <div style={{ position: 'absolute', left: 8, top: 0, height: isLastChild ? '50%' : '100%', width: 0, borderLeft: '1.5px solid color-mix(in srgb, var(--accent), transparent 65%)' }} />
+                                  {/* Horizontal branch to dot */}
+                                  <div style={{ position: 'absolute', left: 8, top: '50%', width: 7, height: 0, borderTop: '1.5px solid color-mix(in srgb, var(--accent), transparent 65%)' }} />
+                                  {/* Dot at branch end */}
+                                  <div style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', width: 4, height: 4, borderRadius: '50%', background: 'var(--accent)', opacity: .5 }} />
+                                </div>
+                                <span style={{ fontSize: 12, color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, fontWeight: 500 }}>{t.title}</span>
+                                {(t.dependencies || []).length > 0 && <span style={{ opacity: .4 }}><I.Link /></span>}
+                              </>
+                            ) : (
+                              /* Regular task row */
+                              <>
+                                <div style={{ width: 4, height: 4, borderRadius: '50%', background: PC[t.priority], flexShrink: 0 }} />
+                                <span style={{ fontSize: 12, color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, fontWeight: 500 }}>{t.title}</span>
+                                {(t.dependencies || []).length > 0 && <span style={{ opacity: .4 }}><I.Link /></span>}
+                              </>
+                            )}
+                          </div>
+                          {(t.subtasks || []).length > 0 && (
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              {t.subtasks.map(s => (
+                                <div key={s.id} style={{ height: 20, display: 'flex', alignItems: 'center', padding: '0 10px 0 24px', fontSize: 11, color: 'var(--text-subtle)' }}>
+                                  <div style={{ width: 5, height: 5, borderRadius: '50%', border: `1px solid ${s.done ? MC[t.assignee] : 'var(--border)'}`, background: s.done ? MC[t.assignee] : 'transparent', marginRight: 6, flexShrink: 0 }} />
+                                  <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textDecoration: s.done ? 'line-through' : 'none' }}>{s.title}</span>
+                                </div>
+                              ))}
+                            </div>
                           )}
                         </div>
-                        {(t.subtasks || []).length > 0 && (
-                          <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            {t.subtasks.map(s => (
-                              <div key={s.id} style={{ height: 20, display: 'flex', alignItems: 'center', padding: '0 10px 0 24px', fontSize: 11, color: 'var(--text-subtle)' }}>
-                                <div style={{ width: 5, height: 5, borderRadius: '50%', border: `1px solid ${s.done ? MC[t.assignee] : 'var(--border)'}`, background: s.done ? MC[t.assignee] : 'transparent', marginRight: 6, flexShrink: 0 }} />
-                                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textDecoration: s.done ? 'line-through' : 'none' }}>{s.title}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );})}
+                      );
+                    })}
                   </div>
 
                   {/* Bars layer */}
@@ -633,7 +700,7 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
                       {mt.map((t, idx) => {
                         let taskTop = 0;
                         for (let j = 0; j < idx; j++) taskTop += getTaskH(mt[j]);
-                        
+
                         let left = 0, width = 0;
                         if (t.isEpic) {
                           left = -50000;
@@ -645,7 +712,7 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
                           left = s * DAY_W;
                           width = Math.max(dur * DAY_W, DAY_W);
                         }
-                        
+
                         const isBlocked = isTaskBlocked(t, tasks);
                         const overdue = t.status !== 'completed' && t.deadline && parse(t.deadline)! < today;
                         const bc = MC[t.assignee], prog = t.progress || 0;
@@ -658,20 +725,20 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
                               onMouseEnter={e => setTip({ task: t, x: e.clientX, y: e.clientY })}
                               onMouseMove={e => { if (tip?.task?.id === t.id) setTip({ task: t, x: e.clientX, y: e.clientY }); }}
                               onMouseLeave={() => setTip(null)}
-                              style={{ 
-                                position: 'absolute', top: taskTop + 5, left, width, height: 38, borderRadius: 4, 
-                                background: t.isEpic ? `color-mix(in srgb, ${bc}, transparent 85%)` : 'var(--bg)', 
+                              style={{
+                                position: 'absolute', top: taskTop + 5, left, width, height: 38, borderRadius: 4,
+                                background: t.isEpic ? `color-mix(in srgb, ${bc}, transparent 85%)` : 'var(--bg)',
                                 borderTop: `1.5px solid ${isBlocked ? 'var(--text-subtle)' : `color-mix(in srgb, ${bc}, transparent 60%)`}`,
                                 borderBottom: `1.5px solid ${isBlocked ? 'var(--text-subtle)' : `color-mix(in srgb, ${bc}, transparent 60%)`}`,
                                 borderLeft: t.isEpic ? 'none' : `1.5px solid ${isBlocked ? 'var(--text-subtle)' : `color-mix(in srgb, ${bc}, transparent 60%)`}`,
                                 borderRight: t.isEpic ? 'none' : `1.5px solid ${isBlocked ? 'var(--text-subtle)' : `color-mix(in srgb, ${bc}, transparent 60%)`}`,
-                                cursor: drag?.taskId === t.id ? 'grabbing' : 'pointer', 
-                                zIndex: drag?.taskId === t.id ? 20 : 12, 
-                                transition: (drag?.taskId === t.id || isExpandingRef.current) ? 'none' : 'left .15s,width .15s, transform .15s', 
-                                userSelect: 'none', 
-                                overflow: t.isEpic ? 'visible' : 'hidden', 
+                                cursor: drag?.taskId === t.id ? 'grabbing' : 'pointer',
+                                zIndex: drag?.taskId === t.id ? 20 : 12,
+                                transition: (drag?.taskId === t.id || isExpandingRef.current) ? 'none' : 'left .15s,width .15s, transform .15s',
+                                userSelect: 'none',
+                                overflow: t.isEpic ? 'visible' : 'hidden',
                                 filter: isBlocked ? 'grayscale(0.8) opacity(0.6)' : 'none',
-                                transform: (drag?.taskId === t.id && drag.mode === 'move' && !drag.subtaskId && drag.axis === 'y') 
+                                transform: (drag?.taskId === t.id && drag.mode === 'move' && !drag.subtaskId && drag.axis === 'y')
                                   ? `translateY(${drag.currentY - drag.startY}px)` : 'none'
                               }}>
                               {!t.isEpic && <div style={{ position: 'absolute', inset: 0, borderRadius: 2, overflow: 'hidden' }}>
@@ -682,10 +749,10 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
                               {!t.isEpic && <div onPointerDown={e => handlePD(e, t, 'rl')} style={{ position: 'absolute', left: -2, top: 0, bottom: 0, width: 8, cursor: 'ew-resize', zIndex: 13 }}>
                                 <div style={{ position: 'absolute', left: 2, top: '30%', bottom: '30%', width: 2, borderRadius: 1, background: bc, opacity: .4 }} />
                               </div>}
-                              
-                              <div 
-                                onPointerDown={e => { if (!t.isEpic) handlePD(e, t, 'move'); else draggedRef.current = false; }} 
-                                onClick={() => { if (!draggedRef.current) onTaskClick(t); }} 
+
+                              <div
+                                onPointerDown={e => { if (!t.isEpic) handlePD(e, t, 'move'); else draggedRef.current = false; }}
+                                onClick={() => { if (!draggedRef.current) onTaskClick(t); }}
                                 style={{ position: t.isEpic ? 'sticky' : 'relative', left: t.isEpic ? `calc(50% + ${SIDEBAR_W / 2}px)` : undefined, transform: t.isEpic ? 'translateX(-50%)' : undefined, width: t.isEpic ? 'max-content' : '100%', display: 'flex', alignItems: 'center', gap: 4, padding: '0 12px', height: '100%', zIndex: 1, boxSizing: 'border-box' }}
                               >
                                 {t.isEpic && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, color: bc }}><I.Link /></div>}
@@ -694,7 +761,7 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
                                 {overdue && <span style={{ fontSize: 10, color: '#f44747', fontWeight: 700, flexShrink: 0 }}>!</span>}
                                 {t.isEpic ? null : <span style={{ fontSize: 11, color: bc, marginLeft: 'auto', fontWeight: 600, flexShrink: 0 }}>{prog}%</span>}
                               </div>
-                              
+
                               {!t.isEpic && <div onPointerDown={e => handlePD(e, t, 'rr')} style={{ position: 'absolute', right: -2, top: 0, bottom: 0, width: 8, cursor: 'ew-resize', zIndex: 13 }}>
                                 <div style={{ position: 'absolute', right: 2, top: '30%', bottom: '30%', width: 2, borderRadius: 1, background: bc, opacity: .4 }} />
                               </div>}
@@ -706,22 +773,22 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
                               const sl = ss * DAY_W, sw = Math.max(sdur * DAY_W, DAY_W);
                               const isD = drag?.subtaskId === s.id;
                               return (
-                                <div 
-                                  key={s.id} 
-                                  style={{ 
-                                    position: 'absolute', 
-                                    top: taskTop + 48 + si * 20 + 6, 
-                                    left: sl, width: sw, height: 8, 
-                                    borderRadius: 4, 
-                                    background: s.done ? `color-mix(in srgb, ${bc}, transparent 20%)` : 'var(--hover)', 
+                                <div
+                                  key={s.id}
+                                  style={{
+                                    position: 'absolute',
+                                    top: taskTop + 48 + si * 20 + 6,
+                                    left: sl, width: sw, height: 8,
+                                    borderRadius: 4,
+                                    background: s.done ? `color-mix(in srgb, ${bc}, transparent 20%)` : 'var(--hover)',
                                     border: `1px solid ${s.done ? bc : isD ? bc : 'var(--border)'}`,
                                     zIndex: 11,
                                     cursor: isD ? 'grabbing' : 'grab',
                                     transition: (isD || isExpandingRef.current) ? 'none' : 'left .1s, width .1s, transform .15s',
-                                    transform: (drag?.taskId === t.id && drag.mode === 'move' && !drag.subtaskId) ? 
-                                      (drag.axis === 'y' ? `translateY(${drag.currentY - drag.startY}px)` : 
-                                      (drag.axis === 'x' ? `translateX(${Math.round((drag.currentX - drag.startX) / DAY_W) * DAY_W}px)` : 'none')) : 'none'
-                                  }} 
+                                    transform: (drag?.taskId === t.id && drag.mode === 'move' && !drag.subtaskId) ?
+                                      (drag.axis === 'y' ? `translateY(${drag.currentY - drag.startY}px)` :
+                                        (drag.axis === 'x' ? `translateX(${Math.round((drag.currentX - drag.startX) / DAY_W) * DAY_W}px)` : 'none')) : 'none'
+                                  }}
                                   onPointerDown={e => handlePD(e, t, 'move', s.id)}
                                   onMouseEnter={e => { e.currentTarget.style.zIndex = '100'; }}
                                   onMouseLeave={e => { e.currentTarget.style.zIndex = '11'; }}
@@ -749,12 +816,12 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
             if (!t || !t.ganttStart || !t.ganttEnd) return null;
             const s = diffD(range.start, t.ganttStart);
             const dur = diffD(t.ganttStart, t.ganttEnd);
-            const left = s * DAY_W + SIDEBAR_W; 
+            const left = s * DAY_W + SIDEBAR_W;
             const width = Math.max(dur * DAY_W, DAY_W);
-            
+
             const pos = taskPositions[t.id];
             if (!pos) return null;
-            
+
             if (drag.axis === 'y') {
               return (
                 <div style={{ position: 'absolute', left, width, top: 0, bottom: 0, pointerEvents: 'none', zIndex: 30 }}>
@@ -764,7 +831,7 @@ export const Gantt = ({ tasks, onTaskClick, onUpdate, searchFilter, memberFilter
               );
             } else if (drag.axis === 'x') {
               // pos.y is absolute from top of component, BODY AREA starts at 56
-              const topEdge = pos.y - 56 - 19; 
+              const topEdge = pos.y - 56 - 19;
               const bottomEdge = pos.y - 56 + 19;
               return (
                 <div style={{ position: 'absolute', left: SIDEBAR_W, right: 0, top: 0, bottom: 0, pointerEvents: 'none', zIndex: 30 }}>
